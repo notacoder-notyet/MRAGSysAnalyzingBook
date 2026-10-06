@@ -1,0 +1,172 @@
+"""
+Централизованная конфигурация проекта.
+
+Все константы в одном месте для легкого управления и избежания дублирования.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+# ============================================================
+# PATHS
+# ============================================================
+DATA_DIR = Path("data")
+RAW_PDF_DIR = DATA_DIR / "raw"  # исходные PDF, скачанные с Яндекс Диска
+CHROMA_PERSIST_DIR = DATA_DIR / "chroma"
+CHUNK_EMBEDDINGS_PATH = DATA_DIR / "chunk_embeddings.npy"
+CHUNK_META_PATH = DATA_DIR / "chunk_meta.csv"
+PAGES_CSV_PATH = DATA_DIR / "pdf_pages.csv"
+CHUNKS_CSV_PATH = DATA_DIR / "pdf_chunks.csv"
+VECTOR_STORE_CONFIG_PATH = Path("vector_store.yaml")
+
+
+# ============================================================
+# WEB APP (FastAPI + SQLAlchemy + JWT)
+# ============================================================
+WEBAPP_HOST = "0.0.0.0"
+WEBAPP_PORT = 8000
+WEBAPP_DIR = Path("webapp")
+STATIC_DIR = WEBAPP_DIR / "static"
+DB_PATH = DATA_DIR / "app.db"
+DATABASE_URL = f"sqlite:///{DB_PATH}"
+
+# JWT. В продакшене секрет берётся из env (JWT_SECRET); здесь — дефолт для локального запуска.
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = 60 * 24 * 7  # 7 дней
+
+# Ограничения полей (валидация на уровне API)
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 32
+PASSWORD_MIN_LENGTH = 6
+CHAT_TITLE_MAX_LENGTH = 60
+MIN_ANSWER_SCORE = 0.25  # ниже этого score считаем, что ответа в учебнике нет
+
+
+# ============================================================
+# YANDEX DISK (источник PDF)
+# ============================================================
+YANDEX_DISK_PUBLIC_KEY = "https://disk.yandex.ru/d/PUjx_ZzRAZ1iHQ"
+YANDEX_API_BASE = "https://cloud-api.yandex.net/v1/disk/public"
+YANDEX_PAGE_LIMIT = 100  # макс. элементов на страницу ответа API
+YANDEX_TIMEOUT = 60.0  # таймаут HTTP-запросов, сек
+YANDEX_MAX_RETRIES = 3  # количество попыток при ошибке скачивания
+
+# Служебные PDF/папки, которые НЕ нужны для RAG (домашки, учебные кейсы).
+# Сравнение по вхождению подстроки в имени, регистр не важен.
+# Маркеры короткие и проверены на реальных именах файлов с диска.
+YANDEX_SKIP_FILENAME_MARKERS: tuple[str, ...] = (
+    "домашнее_задание",
+    "домашнее задание",
+    "homework",
+    "hw_",
+    "постановка",  # «Постановка_реальной_бизнес-задачи.pdf»
+)
+
+
+# ============================================================
+# EMBEDDING MODEL
+# ============================================================
+DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+UPGRADE_EMBEDDING_MODEL = "BAAI/bge-m3"
+EMBEDDING_DIM = 384  # для paraphrase-multilingual-MiniLM-L12-v2
+UPGRADE_EMBEDDING_DIM = 1024  # для BAAI/bge-m3
+# Было 32 при 16 чанках. На ~1000 чанках CPU-прохода хватает с запасом.
+EMBEDDING_BATCH_SIZE = 64
+EMBEDDING_NORMALIZE = True
+
+
+# ============================================================
+# CHUNKING
+# ============================================================
+# Подобрано по EDA на 973 страницах (data/pdf_pages.csv), 30.09.2026.
+# Медиана страницы 619 симв., p75=744, p90=899, max=2265.
+# Симуляция на реальных страницах:
+#   size | чанков | доля страниц в 1 чанк | разорванных страниц
+#    500 |   1800 |                 27.5% |              71.7%   <- старое
+#    800 |   1168 |                 81.1% |              18.2%
+#   1000 |   1034 |                 93.0% |               6.3%   <- выбрано (колено кривой)
+#   1200 |   1006 |                 95.4% |               3.9%   <- +20% контекста ради +1.2п.п.
+# 1000 симв. ~= 350 токенов для русского; при top_k=8 это ~2.9k токенов контекста.
+DEFAULT_CHUNK_SIZE = 1000
+DEFAULT_CHUNK_OVERLAP = 150  # 15% от размера
+
+
+# ============================================================
+# RETRIEVAL
+# ============================================================
+# Было 5 при корпусе из 16 чанков. Корпус вырос до ~1000 чанков,
+# поэтому widем поиск: 8 чанков ~= 2.9k токенов, все бесплатные модели
+# на OpenRouter держат минимум 64k контекста.
+DEFAULT_TOP_K = 8
+DEFAULT_FILTER_LESSON: int | None = None
+
+
+# ============================================================
+# VECTOR STORE
+# ============================================================
+DEFAULT_COLLECTION_NAME = "lessons"
+DEFAULT_VECTOR_STORE_TYPE = "chroma"  # "chroma" или "qdrant"
+QDRANT_DEFAULT_URL = "http://localhost:6333"
+QDRANT_DEFAULT_VECTOR_SIZE = EMBEDDING_DIM
+
+
+# ============================================================
+# LLM
+# ============================================================
+DEFAULT_LLM_MODEL = "gpt-4o-mini"
+DEFAULT_OLLAMA_MODEL = "llama3"
+DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
+DEFAULT_LLM_TEMPERATURE = 0.1
+# Было 1024 при top_k=5 и чанках по 500 символов. Теперь контекст шире
+# (8 чанков по 1000 симв. + вопрос), а ответ должен вмещать
+# рассуждение и блок цитирования — запас до 1536.
+DEFAULT_LLM_MAX_TOKENS = 1536
+DEFAULT_LLM_TIMEOUT = 60.0
+OLLAMA_TIMEOUT = 120.0
+
+# --- OpenRouter (бесплатные модели) ---
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# ВАЖНО: "openrouter/free" НЕ используется — этот авто-роутер может выбрать
+# неподходящую модель из бесплатного пула. На практике он отдал запрос
+# в nvidia/nemotron-3.5-content-safety (классификатор модерации), который
+# вместо ответа возвращает "User Safety: safe".
+#
+# Список ниже проверен живыми запросами (06.10.2026): обе модели дают
+# корректные ответы на русском. Бесплатные модели rate-limited (429),
+# поэтому FallbackLLMClient переключается между ними автоматически.
+OPENROUTER_FREE_MODELS: tuple[str, ...] = (
+    "nvidia/nemotron-3-super-120b-a12b:free",   # 120B (12B активных), проверено
+    "nvidia/nemotron-3-ultra-550b-a55b:free",   # 550B (55B активных), проверено
+    "google/gemma-4-31b-it:free",               # резерв (иногда 400/429 upstream)
+)
+# Заголовки, которые OpenRouter рекомендует для атрибуции трафика
+OPENROUTER_HTTP_REFERER = "https://github.com/ichy5/MRAGSysAnalyzingBook"
+OPENROUTER_APP_TITLE = "MRAGSysAnalyzingBook"
+OPENROUTER_TIMEOUT = 120.0  # free-модели думают дольше платных
+
+
+# ============================================================
+# RAG PIPELINE
+# ============================================================
+RAG_SYSTEM_PROMPT = """Ты — помощник по курсу машинного обучения. Отвечай ТОЛЬКО на основе предоставленных фрагментов учебника.
+
+ПРАВИЛА:
+1. Используй ТОЛЬКО информацию из переданных чанков.
+2. Если информации недостаточно — честно напиши: "В предоставленных материалах нет ответа на этот вопрос."
+3. В конце ответа ОБЯЗАТЕЛЬНО укажи источники в формате: (Урок X, Страница Y)
+4. Если несколько источников — перечисли все: (Урок 6, Страница 3), (Урок 6, Страница 5)
+5. Не выдумывай факты, не используй внешние знания.
+6. Отвечай на русском языке.
+
+ФРАГМЕНТЫ УЧЕБНИКА:
+{context}"""
+
+
+# ============================================================
+# BATCH SIZES
+# ============================================================
+INDEX_BATCH_SIZE = 100  # размер батча при индексации в VectorStore

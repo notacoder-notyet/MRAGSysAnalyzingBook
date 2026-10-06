@@ -1,0 +1,13 @@
+# Игнорируемые файлы для Docker
+*.pyc
+__pycache__/
+*.ipynb_checkpoints
+*.csv
+*.log
+
+# Папки
+venv/
+env/
+
+# Данные
+data/*

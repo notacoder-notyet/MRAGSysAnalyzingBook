@@ -1,0 +1,17 @@
+# Игнорируемые файлы
+*.pyc
+__pycache__/
+*.ipynb_checkpoints
+*.csv
+*.log
+
+# Папки
+venv/
+env/
+.tmp/
+
+# Данные
+data/*
+
+# Секреты (ключи LLM-провайдеров)
+.env

@@ -1,0 +1,8 @@
+type: chroma
+chroma:
+  persist_dir: data/chroma
+  collection: lessons
+qdrant:
+  url: http://localhost:6333
+  collection: lessons
+  vector_size: 384

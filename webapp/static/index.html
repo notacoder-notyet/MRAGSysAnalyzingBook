@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MRAG — RAG по учебникам ML</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+
+  <!-- ============ МОДАЛКА АВТОРИЗАЦИИ ============ -->
+  <div id="auth-modal" class="modal modal--visible">
+    <div class="modal__box modal__box--auth">
+      <h1 class="brand">
+        <span class="brand__m">M</span><span class="brand__r">R</span><span class="brand__a">A</span><span class="brand__g">G</span>
+      </h1>
+      <p class="brand__sub">RAG-система по 59 лекциям машинного обучения</p>
+
+      <div class="tabs">
+        <button class="tab tab--active" data-auth-tab="login">Вход</button>
+        <button class="tab" data-auth-tab="register">Регистрация</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <label class="field">
+          <span class="field__label">Имя пользователя</span>
+          <input type="text" name="username" autocomplete="username" required minlength="3" />
+        </label>
+        <label class="field">
+          <span class="field__label">Пароль</span>
+          <input type="password" name="password" autocomplete="current-password" required minlength="6" />
+        </label>
+        <button type="submit" class="btn btn--primary">Войти</button>
+      </form>
+
+      <form id="register-form" class="auth-form auth-form--hidden">
+        <label class="field">
+          <span class="field__label">Имя пользователя</span>
+          <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
+          <span class="field__hint">Буквы, цифры, дефис и подчёркивание</span>
+        </label>
+        <label class="field">
+          <span class="field__label">Пароль</span>
+          <input type="password" name="password" autocomplete="new-password" required minlength="6" />
+          <span class="field__hint">Минимум 6 символов</span>
+        </label>
+        <button type="submit" class="btn btn--primary">Создать аккаунт</button>
+      </form>
+
+      <p id="auth-error" class="error"></p>
+    </div>
+  </div>
+
+  <!-- ============ МОДАЛКА ПРЕЗЕНТАЦИИ ============ -->
+  <div id="about-modal" class="modal">
+    <div class="modal__box modal__box--about">
+      <button class="modal__close" data-close-modal="about-modal" title="Закрыть">&times;</button>
+      <h2 class="section-title">О проекте</h2>
+      <p class="about__lead">
+        Multimodal RAG-система: отвечает на вопросы по учебнику, указывая урок и страницу.
+      </p>
+
+      <ol class="accordion" id="stages"></ol>
+
+      <div class="about__stack">
+        <h3 class="subsection-title">Технологии</h3>
+        <div class="chips">
+          <span class="chip chip--blue">Python</span>
+          <span class="chip chip--green">FastAPI</span>
+          <span class="chip chip--orange">SQLAlchemy</span>
+          <span class="chip chip--pink">JWT + bcrypt</span>
+          <span class="chip chip--blue">sentence-transformers</span>
+          <span class="chip chip--green">ChromaDB</span>
+          <span class="chip chip--orange">Qdrant</span>
+          <span class="chip chip--pink">pdfplumber</span>
+          <span class="chip chip--blue">OpenRouter</span>
+          <span class="chip chip--green">PDF.js</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ОСНОВНОЙ ИНТЕРФЕЙС ============ -->
+  <div id="app" class="app app--hidden">
+
+    <header class="topbar">
+      <div class="topbar__left">
+        <span class="brand brand--small">
+          <span class="brand__m">M</span><span class="brand__r">R</span><span class="brand__a">A</span><span class="brand__g">G</span>
+        </span>
+        <span class="topbar__caption">RAG по учебникам ML</span>
+      </div>
+      <div class="topbar__right">
+        <button class="btn btn--ghost" id="open-about">О проекте</button>
+        <span class="user-chip" id="user-chip"></span>
+        <button class="btn btn--ghost" id="logout-btn">Выйти</button>
+      </div>
+    </header>
+
+    <main class="layout">
+
+      <aside class="sidebar">
+        <button class="btn btn--primary btn--full" id="new-chat-btn">+ Новый чат</button>
+        <p class="sidebar__label">История</p>
+        <ul class="chat-list" id="chat-list"></ul>
+      </aside>
+
+      <section class="chat">
+        <div class="messages" id="messages">
+          <div class="empty-state" id="empty-state">
+            <h2 class="empty-state__title">Задайте вопрос по курсу</h2>
+            <p class="empty-state__text">
+              Система найдёт ответ в лекциях и покажет страницы-источники справа.
+            </p>
+            <div class="sample-questions">
+              <button class="sample-q">Что такое функция потерь?</button>
+              <button class="sample-q">Как работает backpropagation?</button>
+              <button class="sample-q">Что такое переобучение?</button>
+            </div>
+          </div>
+        </div>
+
+        <form class="composer" id="ask-form">
+          <textarea
+            id="question-input"
+            class="composer__input"
+            placeholder="Спросите что-нибудь по учебнику..."
+            rows="1"
+            required
+          ></textarea>
+          <button type="submit" class="btn btn--primary composer__send" id="send-btn">
+            Отправить
+          </button>
+        </form>
+      </section>
+
+      <section class="pdf-panel pdf-panel--hidden" id="pdf-panel">
+        <div class="pdf-panel__head">
+          <div class="pdf-panel__title">
+            <span class="pdf-panel__lesson" id="pdf-lesson-label">Урок —</span>
+            <span class="pdf-panel__page" id="pdf-page-label">стр. —</span>
+          </div>
+          <button class="modal__close" data-close-modal="pdf-panel" title="Закрыть">&times;</button>
+        </div>
+
+        <div class="pdf-panel__nav">
+          <button class="btn btn--ghost" id="pdf-prev-lesson" title="Предыдущий урок">&laquo; Урок</button>
+          <button class="btn btn--ghost" id="pdf-prev" title="Предыдущая страница">&lsaquo; Назад</button>
+          <input type="number" id="pdf-page-input" class="pdf-panel__input" min="1" value="1" />
+          <button class="btn btn--ghost" id="pdf-next" title="Следующая страница">Вперёд &rsaquo;</button>
+          <button class="btn btn--ghost" id="pdf-next-lesson" title="Следующий урок">Урок &raquo;</button>
+        </div>
+
+        <div class="pdf-panel__viewport" id="pdf-viewport">
+          <div class="pdf-panel__placeholder" id="pdf-placeholder">
+            Откройте источник, чтобы увидеть страницу
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
+
