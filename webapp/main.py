@@ -12,10 +12,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR, WEBAPP_HOST, WEBAPP_PORT
 from webapp.database import init_db
@@ -70,8 +69,35 @@ def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
-# Статика монтируем последней, чтобы не перекрывать API-маршруты
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+@app.get("/static/{path:path}", include_in_schema=False)
+def static_file(path: str) -> FileResponse:
+    """
+    Отдаёт статику без кэширования.
+
+    Нужно для разработки: иначе браузер держит старый app.js и правки
+    не видны, что уже приводило к «пустым» формам без обработчиков.
+
+    Args:
+        path: Путь внутри папки static.
+
+    Returns:
+        Запрошенный файл с заголовками no-cache.
+    """
+    target = STATIC_DIR / path
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+    return FileResponse(
+        target,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+# Вся статика отдаётся через маршрут /static/{path} выше (с no-cache),
+# поэтому отдельный StaticFiles-монт не нужен
 
 
 def main() -> None:

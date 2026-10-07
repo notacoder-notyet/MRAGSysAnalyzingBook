@@ -13,6 +13,61 @@ from rag_pipeline import RAGConfig, create_rag_pipeline
 from vector_store import create_vector_store
 
 
+def check_frontend_assets() -> None:
+    """
+    Проверяет структурную целостность фронтенда.
+
+    Ловит класс ошибок, который не виден парсеру: если функция не закрыта,
+    последующие функции и регистрация обработчиков оказываются вложенными внутрь
+    неё. Синтаксис при этом валиден, но `DOMContentLoaded` не срабатывает,
+    и формы уходят в нативный submit (страница перезагружается, поля очищаются).
+
+    Проверяем три вещи:
+      1. Баланс фигурных скобок в app.js и style.css;
+      2. `DOMContentLoaded` зарегистрирован на верхнем уровне (глубина 0);
+      3. Ключевые функции объявлены ровно один раз.
+    """
+    from pathlib import Path
+
+    from config import STATIC_DIR
+
+    js_path = Path(STATIC_DIR) / "app.js"
+    css_path = Path(STATIC_DIR) / "style.css"
+
+    js_lines = js_path.read_text(encoding="utf-8").split("\n")
+    css = css_path.read_text(encoding="utf-8")
+
+    # 1. Баланс скобок
+    depth = 0
+    dom_depth = None
+    for line in js_lines:
+        depth += line.count("{") - line.count("}")
+        if "DOMContentLoaded" in line:
+            dom_depth = depth
+
+    assert depth == 0, f"app.js: несбалансированные скобки (итоговая глубина {depth})"
+    assert css.count("{") == css.count("}"), "style.css: несбалансированные скобки"
+
+    # 2. Обработчик зарегистрирован на верхнем уровне
+    assert dom_depth is not None, "app.js: не найден DOMContentLoaded"
+    assert dom_depth == 0, (
+        f"app.js: DOMContentLoaded внутри вложенного блока (глубина {dom_depth}) — "
+        "значит какая-то функция не закрыта, обработчики не навесятся"
+    )
+
+    # 3. Ключевые функции объявлены один раз
+    for name in ("restoreSession", "init", "initAuth", "submitAuth"):
+        count = js_lines_count(js_lines, f"function {name}(")
+        assert count == 1, f"app.js: {name} объявлена {count} раз(а), ожидалось 1"
+
+    print("  фронтенд: скобки сбалансированы, DOMContentLoaded на верхнем уровне ✓")
+
+
+def js_lines_count(lines: list[str], needle: str) -> int:
+    """Считает строки, содержащие подстроку (вспомогательное для проверки)."""
+    return sum(1 for line in lines if needle in line)
+
+
 def main() -> int:
     """
     Прогоняет все этапы пайплайна на всех PDF из data/raw.
@@ -20,7 +75,10 @@ def main() -> int:
     Returns:
         0 — все этапы отработали, 1 — папка с PDF пуста.
     """
-    print("=== 1. Discovery ===")
+    print("=== 0. Frontend assets ===")
+    check_frontend_assets()
+
+    print("\n=== 1. Discovery ===")
     pdfs = find_pdfs_in_dir()
     if not pdfs:
         print("PDF не найдены в data/raw. Запустите: python download_pdfs.py")

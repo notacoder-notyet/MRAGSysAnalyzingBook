@@ -197,6 +197,20 @@ function initAuth() {
  * Пробует восстановить сессию из localStorage.
  * @returns {Promise<boolean>} удалось ли
  */
+async function restoreSession() {
+  if (!state.token) return false;
+  try {
+    const user = await api("/api/auth/me");
+    $("#auth-modal").classList.remove("modal--visible");
+    $("#app").classList.remove("app--hidden");
+    $("#user-chip").textContent = user.username;
+    await Promise.all([loadLessons(), loadChats()]);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 // ============================================================
 // УРОКИ
 // ============================================================
@@ -637,7 +651,7 @@ function initPdfPanel() {
     toast(error.message);
   }
 }
-async function restoreSession() {
+
 // ============================================================
 // ПРЕЗЕНТАЦИЯ ПРОЕКТА
 // ============================================================
@@ -834,15 +848,3 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-  if (!state.token) return false;
-  try {
-    const user = await api("/api/auth/me");
-    $("#auth-modal").classList.remove("modal--visible");
-    $("#app").classList.remove("app--hidden");
-    $("#user-chip").textContent = user.username;
-    await Promise.all([loadLessons(), loadChats()]);
-    return true;
-  } catch (error) {
-    return false;
-  }
-}
