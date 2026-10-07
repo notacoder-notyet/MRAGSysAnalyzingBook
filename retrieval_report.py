@@ -129,15 +129,21 @@ def print_report(df: pd.DataFrame, top_k: int) -> None:
 
     print(f"\n=== Мусорность текста страницы (порог {GARBLE_THRESHOLD:.0%}) ===")
     ok = df[df["rank"] > 0]
-    print(f"  успех : средняя {ok['garble'].mean():.3f}, выше порога {int((ok['garble'] > GARBLE_THRESHOLD).sum())}/{len(ok)}")
+    print(
+        f"  успех : средняя {ok['garble'].mean():.3f}, выше порога {int((ok['garble'] > GARBLE_THRESHOLD).sum())}/{len(ok)}"
+    )
     if len(failed):
-        print(f"  провал: средняя {failed['garble'].mean():.3f}, выше порога {int((failed['garble'] > GARBLE_THRESHOLD).sum())}/{len(failed)}")
+        print(
+            f"  провал: средняя {failed['garble'].mean():.3f}, выше порога {int((failed['garble'] > GARBLE_THRESHOLD).sum())}/{len(failed)}"
+        )
 
     if len(failed):
         print("\n=== Провальные вопросы ===")
         for _, r in failed.sort_values("garble", ascending=False).iterrows():
             flag = " [МУСОРНЫЙ ТЕКСТ]" if r["garble"] > GARBLE_THRESHOLD else ""
-            print(f"  {r['ref']:6} мусор={r['garble']:.2f} [{r['type']:9}] {r['question'][:60]}{flag}")
+            print(
+                f"  {r['ref']:6} мусор={r['garble']:.2f} [{r['type']:9}] {r['question'][:60]}{flag}"
+            )
 
 
 def main() -> int:

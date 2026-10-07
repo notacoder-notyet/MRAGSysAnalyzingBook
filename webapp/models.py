@@ -25,9 +25,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
-    chats: Mapped[list["Chat"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
-    )
+    chats: Mapped[list["Chat"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
 
 class Chat(Base):
@@ -70,9 +68,7 @@ class Source(Base):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    message_id: Mapped[int] = mapped_column(
-        ForeignKey("messages.id"), index=True, nullable=False
-    )
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), index=True, nullable=False)
     lesson: Mapped[int] = mapped_column(Integer, nullable=False)
     page: Mapped[int] = mapped_column(Integer, nullable=False)
     score: Mapped[float] = mapped_column(nullable=False, default=0.0)

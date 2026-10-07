@@ -42,6 +42,7 @@ from config import (
 @dataclass
 class LLMResponse:
     """Результат генерации LLM."""
+
     text: str
     model: str
     usage: dict[str, int] | None = None
@@ -340,8 +341,7 @@ class FallbackLLMClient(LLMClient):
                     break
 
         raise RuntimeError(
-            f"Все LLM-бэкенды не ответили ({len(errors)} попыток):\n  "
-            + "\n  ".join(errors)
+            f"Все LLM-бэкенды не ответили ({len(errors)} попыток):\n  " + "\n  ".join(errors)
         )
 
     def chat(
@@ -352,9 +352,7 @@ class FallbackLLMClient(LLMClient):
         **kwargs: Any,
     ) -> LLMResponse:
         """Chat completion с перебором моделей при rate-limit."""
-        return self._try(
-            "chat", messages, temperature=temperature, max_tokens=max_tokens, **kwargs
-        )
+        return self._try("chat", messages, temperature=temperature, max_tokens=max_tokens, **kwargs)
 
     def complete(
         self,
@@ -485,17 +483,13 @@ class MockLLMClient(LLMClient):
 if __name__ == "__main__":
     print("Тест LLM клиента...")
     try:
-        client = create_llm_client(
-            {"type": "openai", "openai": {"model": DEFAULT_LLM_MODEL}}
-        )
+        client = create_llm_client({"type": "openai", "openai": {"model": DEFAULT_LLM_MODEL}})
         print(f"Создан клиент: {type(client).__name__}, модель: {client.model}")
     except Exception as e:
         print(f"Ошибка (ожидаемо без API ключа): {e}")
 
     try:
-        client = create_llm_client(
-            {"type": "ollama", "ollama": {"model": DEFAULT_OLLAMA_MODEL}}
-        )
+        client = create_llm_client({"type": "ollama", "ollama": {"model": DEFAULT_OLLAMA_MODEL}})
         print(f"Создан Ollama клиент: {type(client).__name__}, модель: {client.model}")
     except Exception as e:
         print(f"Ollama недоступен (ожидаемо): {e}")

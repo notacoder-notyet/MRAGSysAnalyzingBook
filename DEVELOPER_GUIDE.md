@@ -18,6 +18,8 @@
 10. [Конфигурация и запуск](#10-конфигурация-и-запуск)
 11. [Полезные ссылки в коде](#11-полезные-ссылки-в-коде)
 12. [Чек-лист качества кода](#12-чек-лист-качества-кода)
+13. [Утилиты ответа (`answer_utils.py`)](#13-утилиты-ответа-answer_utilspy)
+14. [Тесты, CI и Docker](#14-тесты-ci-и-docker)
 
 ---
 
@@ -464,18 +466,21 @@ config: RAGConfig | None
 
 ### 7.4 `RAGPipeline.build_context(chunks) -> str`
 
-Собирает контекст с явными заголовками источников:
+Собирает контекст, помечая каждый фрагмент номером в квадратных скобках:
 
 ```
-[Источник 1: Урок 6, Страница 3]
+[1] Урок 6, Страница 3
 ФУНКЦИЯ ПОТЕРЬ. Функция потерь = Линейка ошибки...
 
 ---
-[Источник 2: Урок 24, Страница 16]
+[2] Урок 24, Страница 16
 Продвинутые функции потерь: Triplet Loss и Focal Loss...
 ```
 
-Заголовки нужны, чтобы модель видела, откуда взят текст, и могла цитировать.
+Номер `[i]` — «якорь» для цитирования: модель ссылается на него как `[1]`,
+а реальные урок/страницу backend подставляет из метаданных
+(`answer_utils.substitute_refs`). Поэтому модель **не может выдумать** номер
+страницы — частая причина галлюцинаций в цитатах.
 
 ---
 
@@ -484,9 +489,10 @@ config: RAGConfig | None
 **Ключевые правила промпта:**
 1. Отвечать **только** по переданным чанкам
 2. Если данных нет — честно сказать «в материалах нет ответа»
-3. В конце указать источники в формате `(Урок X, Страница Y)`
-4. Не выдумывать факты, не использовать внешние знания
-5. Отвечать на русском
+3. Ссылаться на фрагменты по номеру `[1]`, `[2]` (не выдумывать номера уроков/страниц)
+4. Писать обычным текстом: **без LaTeX** (`\(...\)`, `\frac`, `\nabla`) и без Markdown
+5. Не добавлять служебные сноски вида `【...】`
+6. Не выдумывать факты, отвечать на русском
 
 ---
 
@@ -494,8 +500,9 @@ config: RAGConfig | None
 
 Главный метод: `retrieve → build_context → build_prompt → llm.chat → extract_sources`.
 
-`extract_sources` дедуплицирует пары `(lesson, page)`, чтобы в ответе не было
-повторов одной и той же страницы.
+`extract_sources` дедуплицирует пары `(lesson, page)`. Дополнительно сервисный
+слой (`webapp/rag_service.py`) прогоняет ответ через `substitute_refs` и
+`sanitize_answer`, а источники — через `dedupe_sources` (одна страница на урок).
 
 ---
 
@@ -569,8 +576,13 @@ User ──< Chat ──< Message ──< Source
 **Двойная проверка под `threading.Lock`:** FastAPI может принять два запроса
 одновременно, и без блокировки модель загрузилась бы дважды.
 
-**Фильтр `MIN_ANSWER_SCORE`:** источники со score ниже 0.25 не показываются —
-иначе пользователь получил бы ссылку на нерелевантную страницу.
+**Обработка ответа** (чистые функции — `answer_utils.py`):
+- `substitute_refs` — `[N]` → реальные `(Урок N, Страница M)` из метаданных чанков
+- `sanitize_answer` — снимает LaTeX / Markdown / сноски `【…】`
+- `dedupe_sources` — одна (самая релевантная) страница на урок
+
+**Фильтр `MIN_ANSWER_SCORE`** (0.82, откалиброван под e5): источники со score
+ниже порога не показываются — иначе пользователь получил бы нерелевантную ссылку.
 
 ---
 
@@ -597,17 +609,25 @@ User ──< Chat ──< Message ──< Source
 | `index.html` | Разметка: модалка авторизации, чат, панель PDF, презентация |
 | `style.css` | Тема VS Code Dark+ (CSS-переменные для акцентов) |
 | `app.js` | Логика: auth, чаты, PDF.js, аккордеон презентации |
+| `vendor/pdf*.js` | PDF.js отдаётся **локально** (без внешнего CDN) |
 
-**Почему без сборки:** ванильный JS + CDN для PDF.js — не нужен Node.js,
-проект запускается одной командой.
+**Почему без сборки:** ванильный JS; Node.js нужен только для проверки синтаксиса
+в CI (`node --check`).
+
+**Особенности UI:**
+- `linkifyAnswer()` делает упоминания «(Урок X, Страница Y)» в тексте ответа кликабельными;
+- PDF-панель подгоняется по ширине и высоте, есть полноэкранный режим;
+- PDF привязан к чату: при переключении открывается страница-источник этого чата
+  или панель закрывается.
 
 **Связка «ответ → страница»:**
 ```
-POST /api/chat/ask → sources
-   → чипы «Урок 6 · стр. 3»
+POST /api/chat/ask → sources + answer со ссылками [N]
+   → backend: [N] → «(Урок N, Страница M)»
+   → чипы «Урок 6 · стр. 3» + кликабельные ссылки в тексте
    → openPdfPage(6, 3)
    → PDF.js грузит /api/lessons/6/pdf
-   → рендер canvas + навигация ‹ ›
+   → рендер canvas + навигация ‹ ›, полноэкранный режим
 ```
 
 ---
@@ -674,32 +694,37 @@ python retrieval_report.py           # диагностика: какой про
 | `vector_store.yaml` | Тип векторной БД и её параметры |
 | `.env` | Секреты: `OPENROUTER_API_KEY`, `JWT_SECRET` (в `.gitignore`) |
 | `.env.example` | Шаблон для `.env` — без секретов, попадает в git |
+| `pyproject.toml` | Конфиг инструментов: pytest, ruff, black, mypy |
+| `requirements-dev.txt` | Инструменты + лёгкие зависимости для unit-тестов (без torch) |
 
 ### 10.2 Полный цикл
 
-```bash
-# 1. Зависимости
-pip install -r requirements.txt
+Удобнее через `Makefile` (`make help` — список команд):
 
-# 2. Секреты
+```bash
+make install                  # pip install -r requirements.txt
+make dev                      # зависимости для тестов/линтера (без torch)
 cp .env.example .env          # вписать OPENROUTER_API_KEY
 
-# 3. Данные
-python download_pdfs.py       # 59 PDF с Яндекс Диска → data/raw/
-python pars_pdf.py            # 973 страницы → 1034 чанка
-python embeddings.py          # (1034, 384)
-python index_to_vector_store.py --clear
+make download                 # 59 PDF → data/raw/
+make parse                    # ~973 страницы → ~1034 чанка
+make index                    # эмбеддинги (768-dim) + индексация в Chroma
 
-# 4. Оценка (опционально)
-python gold_set.py eval
-python retrieval_report.py
+python gold_set.py eval       # оценка (опционально)
+python retrieval_report.py    # диагностика провалов
 
-# 5. Приложение
-python -m webapp.main         # http://localhost:8000
-
-# 6. Тесты
-python test_full_pipeline.py
+make run                      # http://localhost:8000
+make test                     # unit-тесты (pytest)
+make lint                     # ruff + black --check + node --check
 ```
+
+**Docker** (после `make index`, чтобы в `./data` лежал готовый индекс):
+
+```bash
+docker compose up --build     # → http://localhost:8000
+```
+
+> Текущая модель эмбеддингов — `intfloat/multilingual-e5-base` (768-dim).
 
 ### 10.3 Как переключать компоненты
 
@@ -742,7 +767,13 @@ python test_full_pipeline.py
 | Gold-набор | `gold_set.py` |
 | Диагностика поиска | `retrieval_report.py` |
 | Скачивание PDF | `download_pdfs.py` |
+| Утилиты ответа | `answer_utils.py` — `sanitize_answer`, `dedupe_sources`, `substitute_refs` |
+| Проверка фронтенда | `frontend_check.py` |
+| Unit-тесты | `tests/` |
 | Сквозной тест | `test_full_pipeline.py` |
+| CI | `.github/workflows/ci.yml` |
+| Docker | `Dockerfile`, `docker-compose.yml` |
+| Команды разработки | `Makefile` |
 
 ---
 
@@ -760,11 +791,85 @@ python test_full_pipeline.py
 - [x] CSS-скобки сбалансированы, JS-синтаксис валиден
 - [x] Секреты — только в `.env`, он в `.gitignore`
 
+Что сделано за последнюю итерацию:
+
+- [x] `pytest`-набор unit-тестов (`tests/`, 33 теста) + разделение unit / integration
+- [x] CI (`.github/workflows/ci.yml`): `ruff` + `black --check` + `pytest` + `py_compile` + `node --check`
+- [x] Код отформатирован `black` (line-length 100), `black --check` зелёный
+- [x] `answer_utils.py` — чистые функции вынесены из тяжёлого `rag_service.py`
+- [x] `frontend_check.py` — структурная проверка `app.js` / `style.css`
+- [x] Docker (`Dockerfile`, `docker-compose.yml`) и `Makefile`
+
 Что можно улучшить дальше:
 
-- [ ] `pytest` вместо скриптовых тестов
-- [ ] `mypy --strict` по всем модулям
+- [ ] `mypy` — сейчас 19 ошибок типизации сторонних SDK; включить в CI после починки
 - [ ] Logging вместо `print` в скриптах пайплайна
 - [ ] Alembic для миграций схемы БД
 - [ ] Переменная `JWT_SECRET` обязательна из env (сейчас есть dev-дефолт)
+
+---
+
+## 13. Утилиты ответа (`answer_utils.py`)
+
+Модуль намеренно **без тяжёлых зависимостей** (только стандартная библиотека).
+Это позволяет импортировать его в Pydantic-схемах, unit-тестах и CI, не загружая
+torch / sentence-transformers / chromadb.
+
+| Функция | Что делает |
+|---------|-----------|
+| `sanitize_answer(text)` | Убирает LaTeX-делимитеры и команды (`\frac`→`(a)/(b)`, `\sqrt`→`sqrt`, `\nabla`→`∇`), Markdown (`**`, `#`, `-`), сноски `【…】`; нормализует экзотические пробелы/дефисы |
+| `dedupe_sources(sources)` | Оставляет по одной (самой релевантной) странице на урок, сортирует по score |
+| `substitute_refs(answer, chunks)` | Заменяет ссылки `[1]`, `[1, 2]` на реальные «(Урок N, Страница M)» из метаданных чанков; неверные номера отбрасывает |
+
+```python
+from answer_utils import sanitize_answer, dedupe_sources, substitute_refs
+
+answer = substitute_refs("[1] — определение градиента.", retrieved_chunks)
+answer = sanitize_answer(answer)   # чистим LaTeX/Markdown/сноски
+sources = dedupe_sources(sources)  # одна страница на урок
+```
+
+Порядок важен: сначала `substitute_refs` (пока в тексте есть `[N]`), затем
+`sanitize_answer`.
+
+---
+
+## 14. Тесты, CI и Docker
+
+### 14.1 Пирамида тестов
+
+| Уровень | Файлы | Нужны данные/торч | Где гоняется |
+|---------|-------|-------------------|--------------|
+| Unit | `tests/test_*.py` | нет | CI (`make test`, ~2 c) |
+| Integration | `test_full_pipeline.py` | да | локально, вручную |
+
+Unit-тесты покрывают чистые функции и лёгкие слои: `answer_utils`, `security`
+(bcrypt/JWT), `schemas` (сериализация), `pars_pdf.chunk_text`,
+`gold_set.parse_refs`, структуру фронтенда (`frontend_check`).
+
+```bash
+make test          # pytest tests/
+make lint          # ruff + black --check + node --check
+```
+
+### 14.2 Continuous Integration
+
+`.github/workflows/ci.yml` (push/PR): `ruff check` (только реальные ошибки —
+`E9/F63/F7/F82`), `black --check`, `pytest`, `py_compile` всех модулей,
+`node --check webapp/static/app.js`. Конфиг инструментов — в `pyproject.toml`.
+
+### 14.3 Docker
+
+```bash
+make index                    # индекс → ./data (монтируется томом)
+docker compose up --build     # → http://localhost:8000
+```
+
+- `Dockerfile` — `python:3.12-slim`, CPU-only; зависимости кэшируются отдельным слоем.
+- `docker-compose.yml` — монтирует `./data`, читает `.env`, healthcheck на `/api/health`.
+
+### 14.4 Makefile
+
+`make help` печатает все команды: `install`, `dev`, `download`, `parse`, `index`,
+`run`, `test`, `lint`, `format`, `docker-build`, `docker-up`, `docker-down`.
 

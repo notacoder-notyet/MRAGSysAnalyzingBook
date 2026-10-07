@@ -132,9 +132,7 @@ def get_current_user(
     payload = decode_access_token(credentials.credentials)
     user_id = payload.get("sub")
     if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Некорректный токен"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Некорректный токен")
 
     user = db.get(User, int(user_id))
     if user is None:

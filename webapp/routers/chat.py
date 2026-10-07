@@ -72,11 +72,7 @@ def list_chats(
 ) -> list[Chat]:
     """Возвращает чаты пользователя, свежие — сверху."""
     return list(
-        db.scalars(
-            select(Chat)
-            .where(Chat.user_id == user.id)
-            .order_by(Chat.updated_at.desc())
-        )
+        db.scalars(select(Chat).where(Chat.user_id == user.id).order_by(Chat.updated_at.desc()))
     )
 
 

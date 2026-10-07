@@ -80,10 +80,7 @@ def index() -> HTMLResponse:
 
     # Версия = самый свежий mtime среди файлов фронтенда
     version = int(
-        max(
-            (STATIC_DIR / name).stat().st_mtime
-            for name in ("index.html", "style.css", "app.js")
-        )
+        max((STATIC_DIR / name).stat().st_mtime for name in ("index.html", "style.css", "app.js"))
     )
 
     html = html.replace("/static/style.css", f"/static/style.css?v={version}")

@@ -232,9 +232,7 @@ def build_target_name(folder_name: str, file_index: int, file_total: int) -> str
     return f"lesson_{lesson}.pdf"
 
 
-def find_pdfs(
-    client: YandexDiskClient, root: str = "/"
-) -> Iterator[tuple[str, str, str, int]]:
+def find_pdfs(client: YandexDiskClient, root: str = "/") -> Iterator[tuple[str, str, str, int]]:
     """
     Обходит дерево папок и выдаёт только полезные PDF-файлы.
 
@@ -359,9 +357,7 @@ def main() -> int:
     Returns:
         0 — успех, 1 — были ошибки скачивания или доступа к диску.
     """
-    parser = argparse.ArgumentParser(
-        description="Скачивание PDF уроков с публичного Яндекс Диска"
-    )
+    parser = argparse.ArgumentParser(description="Скачивание PDF уроков с публичного Яндекс Диска")
     parser.add_argument(
         "--dest",
         default=str(RAW_PDF_DIR),

@@ -98,9 +98,7 @@ def extract_tables_from_pdf(pdf_path: str) -> list[pd.DataFrame]:
 
     # Первая строка таблицы используется как заголовок колонок
     return [
-        pd.DataFrame(table[1:], columns=table[0])
-        for table in tables
-        if table and len(table) > 1
+        pd.DataFrame(table[1:], columns=table[0]) for table in tables if table and len(table) > 1
     ]
 
 
@@ -129,9 +127,7 @@ def build_pages_dataframe(pages: list[dict[str, Any]]) -> pd.DataFrame:
 
     # Метрики для EDA: символы и слова (по пробелам)
     pages_df["char_count"] = pages_df["text"].fillna("").str.len()
-    pages_df["word_count"] = (
-        pages_df["text"].fillna("").str.split().str.len().fillna(0).astype(int)
-    )
+    pages_df["word_count"] = pages_df["text"].fillna("").str.split().str.len().fillna(0).astype(int)
     return pages_df
 
 

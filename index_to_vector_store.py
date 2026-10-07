@@ -22,20 +22,14 @@ from vector_store import create_vector_store, load_config, save_config
 
 def main():
     parser = argparse.ArgumentParser(description="Индексация чанков в векторное хранилище")
-    parser.add_argument(
-        "--qdrant", action="store_true", help="Использовать Qdrant вместо Chroma"
-    )
+    parser.add_argument("--qdrant", action="store_true", help="Использовать Qdrant вместо Chroma")
     parser.add_argument(
         "--embeddings",
         default=str(CHUNK_EMBEDDINGS_PATH),
         help="Путь к .npy файлу",
     )
-    parser.add_argument(
-        "--meta", default=str(CHUNK_META_PATH), help="Путь к CSV метаданным"
-    )
-    parser.add_argument(
-        "--clear", action="store_true", help="Очистить коллекцию перед индексацией"
-    )
+    parser.add_argument("--meta", default=str(CHUNK_META_PATH), help="Путь к CSV метаданным")
+    parser.add_argument("--clear", action="store_true", help="Очистить коллекцию перед индексацией")
     args = parser.parse_args()
 
     # Подготовка конфига

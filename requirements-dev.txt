@@ -1,0 +1,25 @@
+# Инструменты разработки/CI + лёгкие рантайм-зависимости для unit-тестов.
+#
+# Важно: НЕ включает torch / sentence-transformers / chromadb — unit-тесты
+# намеренно не тянут тяжёлые ML-пакеты (см. tests/ и answer_utils.py).
+# Для интеграционного теста (test_full_pipeline.py) нужен полный набор:
+#   pip install -r requirements.txt
+
+# --- Инструменты ---
+pytest>=8.0
+ruff>=0.6
+black>=24.0
+mypy>=1.10
+esprima>=4.0
+
+# --- Лёгкие рантайм-зависимости, нужные тестам ---
+fastapi>=0.115.0
+pydantic>=2.0
+sqlalchemy>=2.0.0
+pyjwt>=2.8.0
+bcrypt>=4.0.0
+pyyaml>=6.0
+python-dotenv>=1.0.0
+pdfplumber>=0.11.0
+pandas>=2.0.0
+numpy>=1.26.0

@@ -189,9 +189,7 @@ class ChromaStore(VectorStore):
         for doc_id, metadata, document in zip(
             results["ids"], results["metadatas"], results["documents"]
         ):
-            out.append(
-                {"id": doc_id, "metadata": metadata or {}, "text": document or ""}
-            )
+            out.append({"id": doc_id, "metadata": metadata or {}, "text": document or ""})
         return out
 
     def clear(self) -> None:
@@ -280,8 +278,7 @@ class QdrantStore(VectorStore):
         qdrant_filter = None
         if filter_dict:
             conditions = [
-                FieldCondition(key=k, match=MatchValue(value=v))
-                for k, v in filter_dict.items()
+                FieldCondition(key=k, match=MatchValue(value=v)) for k, v in filter_dict.items()
             ]
             qdrant_filter = Filter(must=conditions)
 
@@ -332,7 +329,11 @@ class QdrantStore(VectorStore):
 
     def clear(self) -> None:
         self.client.delete_collection(collection_name=self.collection_name)
-        self.__init__(url=self.client._host, collection_name=self.collection_name, vector_size=self.vector_size)
+        self.__init__(
+            url=self.client._host,
+            collection_name=self.collection_name,
+            vector_size=self.vector_size,
+        )
 
 
 def create_vector_store(config: dict[str, Any] | None = None) -> VectorStore:
@@ -409,7 +410,9 @@ DEFAULT_CONFIG = {
 if __name__ == "__main__":
     # Демо: создаём дефолтный конфиг файл
     save_config(DEFAULT_CONFIG)
-    print(f"Создан {VECTOR_STORE_CONFIG_PATH} с дефолтными настройками ({DEFAULT_VECTOR_STORE_TYPE})")
+    print(
+        f"Создан {VECTOR_STORE_CONFIG_PATH} с дефолтными настройками ({DEFAULT_VECTOR_STORE_TYPE})"
+    )
 
     # Быстрый тест Chroma
     store = create_vector_store()

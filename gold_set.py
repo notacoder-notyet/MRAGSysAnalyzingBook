@@ -339,9 +339,7 @@ def evaluate_retrieval(
             continue
         total += 1
         results = store.search(vectors[total - 1], top_k=max_k)
-        found = [
-            (h["metadata"].get("lesson"), h["metadata"].get("page")) for h in results
-        ]
+        found = [(h["metadata"].get("lesson"), h["metadata"].get("page")) for h in results]
         for k in ks:
             if refs & set(found[:k]):
                 hits[k] += 1
@@ -478,9 +476,7 @@ def generate_gold_set(
     if llm_client is None:
         llm_client = create_llm_client()
     if isinstance(llm_client, MockLLMClient):
-        raise RuntimeError(
-            "LLM недоступен (MockLLMClient). Проверьте OPENROUTER_API_KEY в .env"
-        )
+        raise RuntimeError("LLM недоступен (MockLLMClient). Проверьте OPENROUTER_API_KEY в .env")
 
     candidates = sample_candidates(n_candidates=n_candidates)
     print(f"Кандидатов: {len(candidates)} | модель: {getattr(llm_client, 'model', '?')}\n")
@@ -493,9 +489,9 @@ def generate_gold_set(
         lesson, page = int(cand["lesson"]), int(cand["page"])
         ref = f"{lesson}:{page}"
         try:
-            questions = generate_questions_for_ref(
-                lesson, page, str(cand["text"]), llm_client
-            )[:questions_per_ref]
+            questions = generate_questions_for_ref(lesson, page, str(cand["text"]), llm_client)[
+                :questions_per_ref
+            ]
         except Exception as error:  # noqa: BLE001 — не роняем весь прогон
             print(f"  [{i}/{len(candidates)}] {ref}: ОШИБКА {str(error)[:120]}")
             failed_refs.append(ref)
@@ -582,7 +578,9 @@ def main() -> int:
         candidates = sample_candidates(n_candidates=args.n)
         print(f"Кандидатов: {len(candidates)}")
         for c in candidates[:15]:
-            print(f"  урок {c['lesson']:3} стр. {c['page']:3} | {c['n_chunks']} чанков | {len(c['text'])} симв.")
+            print(
+                f"  урок {c['lesson']:3} стр. {c['page']:3} | {c['n_chunks']} чанков | {len(c['text'])} симв."
+            )
         if args.prompts:
             with open(args.prompts, "w", encoding="utf-8") as f:
                 for c in candidates:

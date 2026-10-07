@@ -1,36 +1,86 @@
 # MRAGSysAnalyzingBook
 
-Пет-проект: **Multimodal RAG** по учебным PDF (59 уроков, citation на урок и страницу)
-с полноценным веб-интерфейсом (чат + просмотр презентаций).
+[![CI](https://github.com/notacoder-notyet/MRAGSysAnalyzingBook/actions/workflows/ci.yml/badge.svg)](https://github.com/notacoder-notyet/MRAGSysAnalyzingBook/actions/workflows/ci.yml)
+
+Пет-проект: **Multimodal RAG** по учебным PDF (59 уроков, ~1000 страниц) с
+цитированием урока и страницы и полноценным веб-интерфейсом (чат + просмотр
+презентаций).
+
+Ключевая идея — **проверяемость ответа**. Система не просто генерирует текст, а
+ссылается на конкретный слайд PDF. Чтобы модель не выдумывала номера страниц,
+она ссылается на фрагменты по индексу (`[1]`, `[2]`), а реальные
+«Урок N, Страница M» подставляются из метаданных найденных чанков
+(`answer_utils.substitute_refs`) — поэтому ссылка не может «поплыть».
 
 Ориентир по продукту и архитектуре — [`idea.MD`](idea.MD).
 
-## 🚀 Быстрый запуск веб-приложения
+## 🚀 Быстрый запуск
 
 ```bash
-pip install -r requirements.txt
+# 1. Зависимости (полный набор, включая torch)
+make install                 # = pip install -r requirements.txt
 
-cp .env.example .env          # вписать OPENROUTER_API_KEY (бесплатно)
-python download_pdfs.py       # 59 PDF → data/raw/
-python pars_pdf.py            # парсинг + чанкинг
-python embeddings.py          # эмбеддинги
-python index_to_vector_store.py --clear   # индексация в Chroma
+# 2. Секреты
+cp .env.example .env         # вписать OPENROUTER_API_KEY (есть бесплатные модели)
 
-python -m webapp.main         # → http://localhost:8000
+# 3. Данные (один раз; ~15–30 мин из-за эмбеддингов)
+make download                # 59 PDF → data/raw/
+make parse                   # парсинг + чанкинг
+make index                   # эмбеддинги + индексация в Chroma
+
+# 4. Запуск
+make run                     # → http://localhost:8000
 ```
 
-Что умеет интерфейс:
+Альтернатива — **Docker** (после шага 3, чтобы в `./data` уже лежал индекс):
+
+```bash
+docker compose up --build    # → http://localhost:8000
+```
+
+> `make help` покажет все команды (download / parse / index / run / test / lint / docker).
+
+### Что умеет интерфейс
 
 | Возможность | Описание |
 |-------------|----------|
-| **Чат** | Вопрос → ответ с цитатами `(Урок X, стр. Y)` |
-| **Панель PDF** | Страница-источник открывается рядом; листание вперёд/назад и по урокам |
+| **Чат** | Вопрос → ответ; ссылки-источники `[N]` становятся кликабельными «(Урок X, Страница Y)» |
+| **Панель PDF** | Страница-источник открывается рядом; листание по страницам/урокам, полноэкранный режим |
+| **Источники** | Чипы под ответом: по одной (самой релевантной) странице на урок — без дублей |
+| **Читаемый ответ** | Постобработка убирает LaTeX, Markdown и служебные сноски `【…】` |
 | **Авторизация** | Регистрация/вход, JWT, пароли хешируются bcrypt |
 | **История чатов** | Хранится на сервере в SQLite, доступна с любого устройства |
 | **Презентация проекта** | 7 этапов с раскрывающимися деталями |
 
 Тема оформления — VS Code Dark+: тёмный фон, зелёные акценты и подсветка
 синим / оранжевым / розовым.
+
+> **Офлайн-режим.** С облачным OpenRouter интернет нужен. Полностью локально
+> система работает через **Ollama** (`OLLAMA_BASE_URL` в `.env`): LLM,
+> эмбеддинги и векторное хранилище — всё локальное.
+
+## 🗂️ Структура проекта
+
+```
+├── config.py                 # единый источник констант (single source of truth)
+├── answer_utils.py           # чистые функции ответа: sanitize / dedupe_sources / substitute_refs
+├── frontend_check.py         # структурная проверка app.js / style.css (без тяжёлых зависимостей)
+├── pars_pdf.py               # парсинг PDF → страницы → чанки
+├── embeddings.py             # эмбеддинги (multilingual-e5-base)
+├── vector_store.py           # абстракция Chroma / Qdrant
+├── index_to_vector_store.py  # индексация чанков
+├── llm.py                    # LLM: OpenAI / OpenRouter / Ollama / Mock + fallback
+├── rag_pipeline.py           # retrieve → prompt([N]-ссылки) → generate
+├── gold_set.py               # gold-набор и метрики (Hit@k, MRR)
+├── retrieval_report.py       # диагностика провалов retrieval
+├── download_pdfs.py          # скачивание PDF с Яндекс Диска
+├── test_full_pipeline.py     # интеграционный сквозной тест (нужны данные)
+├── webapp/                   # FastAPI-приложение (см. «Архитектура», ниже)
+├── tests/                    # unit-тесты на pytest (без torch)
+├── Dockerfile / docker-compose.yml
+├── Makefile                  # удобные команды
+└── .github/workflows/ci.yml  # CI: ruff + black + pytest + py_compile + JS
+```
 
 ## Что уже есть
 
@@ -46,6 +96,16 @@ python -m webapp.main         # → http://localhost:8000
 - ✅ **RAG пайплайн** — `rag_pipeline.py`: retrieve → prompt → generate → answer + sources
 - ✅ **Веб-приложение** — `webapp/`: FastAPI + JWT + SQLite + чат + PDF-вьювер
 - ✅ **Оценка качества** — gold-набор (63 вопроса), Hit@k/MRR, диагностика провалов
+
+**Надёжность ответа и инженерное качество**
+
+- ✅ **Цитаты по индексу** — модель ссылается на фрагменты `[N]`, реальные урок/страница подставляются из метаданных (`answer_utils.substitute_refs`) — ссылка не выдумывается
+- ✅ **Читаемость ответа** — очистка LaTeX / Markdown / сносок `【…】` (`answer_utils.sanitize_answer`), применяется и к старым сообщениям при отдаче
+- ✅ **Дедуп источников** — одна (самая релевантная) страница на урок (`answer_utils.dedupe_sources`)
+- ✅ **Unit-тесты** — `tests/` на pytest (33 теста), без тяжёлых ML-зависимостей
+- ✅ **CI** — GitHub Actions: `ruff` + `black --check` + `pytest` + `py_compile` + `node --check` (`.github/workflows/ci.yml`)
+- ✅ **Docker** — `Dockerfile` + `docker-compose.yml`, запуск одной командой
+- ✅ **Makefile** — `make install/dev/parse/index/run/test/lint/docker-up`
 
 ## Стек на текущем этапе
 
@@ -303,9 +363,9 @@ webapp/
 ├── main.py            # FastAPI: CORS, lifespan, монтирование роутеров и статики
 ├── database.py        # SQLAlchemy engine + SessionLocal + get_db()
 ├── models.py          # ORM: User, Chat, Message, Source
-├── schemas.py         # Pydantic: валидация запросов и сериализация ответов
+├── schemas.py         # Pydantic: валидация + очистка ответа и дедуп источников (answer_utils)
 ├── security.py        # bcrypt (пароли) + PyJWT (токены) + get_current_user
-├── rag_service.py     # синглтон RAG-пайплайна (модель грузится один раз)
+├── rag_service.py     # синглтон RAG-пайплайна: ask() + санитайзер/ссылки [N]
 ├── routers/
 │   ├── auth.py        # /api/auth: register, login, me
 │   ├── chat.py        # /api/chat: CRUD чатов + /ask
@@ -355,15 +415,19 @@ User ──< Chat ──< Message ──< Source
 ### Как работает связка «ответ → страница PDF»
 
 1. `POST /api/chat/ask` → RAG возвращает ответ и список `sources`
-2. Фронтенд рисует источники чипами `Урок 6 · стр. 3`
-3. Клик по чипу вызывает `openPdfPage(lesson, page)`
-4. PDF.js грузит `/api/lessons/{n}/pdf` и рендерит страницу на canvas
-5. Навигация: `‹ Назад` / `Вперёд ›` по страницам, `« Урок` / `Урок »` между лекциями
+2. Backend подставляет вместо ссылок `[N]` реальные «(Урок X, Страница Y)» из
+   метаданных чанков (`answer_utils.substitute_refs`) и чистит текст
+   (`sanitize_answer`), источники дедуплицируются по уроку
+3. Фронтенд рисует источники чипами `Урок 6 · стр. 3`, а упоминания в тексте
+   ответа делает кликабельными (`app.js → linkifyAnswer`)
+4. Клик по чипу или ссылке вызывает `openPdfPage(lesson, page)`
+5. PDF.js грузит `/api/lessons/{n}/pdf` и рендерит страницу на canvas
+   (подгонка по ширине и высоте; есть полноэкранный режим)
+6. Навигация: `‹ Назад` / `Вперёд ›` по страницам, `« Урок` / `Урок »` между лекциями
 
-Фильтр `MIN_ANSWER_SCORE` (0.25) отсекает слабые совпадения, чтобы не показывать
-пользователю ложную ссылку.
-
-## Модули
+Фильтр `MIN_ANSWER_SCORE` (0.82, откалиброван под e5) отсекает слабые совпадения,
+чтобы не показывать пользователю ложную ссылку. Дополнительно источники
+дедуплицируются по уроку (`answer_utils.dedupe_sources`).
 
 ## Модули
 
@@ -640,6 +704,43 @@ python retrieval_report.py --top-k 20
 
 ---
 
+## 🧪 Тесты и качество
+
+Проект разделяет проверки на **unit** (быстрые, без данных — гоняются в CI) и
+**integration** (нужен индекс и PDF — локально).
+
+```bash
+make test         # unit-тесты (pytest), ~2 c, без torch
+make lint         # ruff + black --check + node --check
+```
+
+| Уровень | Что покрыто | Файлы |
+|---------|-------------|-------|
+| Unit | `sanitize_answer`, `dedupe_sources`, `substitute_refs`, bcrypt/JWT, схемы API, чанкинг, gold-парсинг, структура фронтенда | `tests/` |
+| Integration | сквозной путь PDF → индекс → RAG-ответ | `test_full_pipeline.py` |
+
+Структурная проверка фронтенда (`frontend_check.py`) ловит класс ошибок, который
+не виден синтаксическому парсеру: незакрытая функция или CSS-правило «утаскивает»
+весь код внутрь себя — формы уходят в нативный submit, а стили перестают
+применяться.
+
+## 🔁 CI/CD
+
+`.github/workflows/ci.yml` при каждом push/PR запускает: `ruff check` (только
+реальные ошибки — `E9/F63/F7/F82`), `black --check`, `pytest`, `py_compile` всех
+модулей и `node --check` для `app.js`.
+
+## 🐳 Docker
+
+```bash
+make index                   # индекс должен лежать в ./data (монтируется томом)
+docker compose up --build    # → http://localhost:8000
+```
+
+`Dockerfile` — `python:3.12-slim` (CPU-only). `docker-compose.yml` монтирует
+`./data` (индекс Chroma + SQLite), читает секреты из `.env` и проверяет
+`/api/health` через healthcheck.
+
 ## 🗑️ Что можно удалить / оптимизировать
 
 ### Кандидаты на удаление (legacy / не используются)
@@ -670,7 +771,9 @@ python retrieval_report.py --top-k 20
 | **VectorStore** | Connection pooling для Qdrant, health checks | Low |
 | **Logging** | Заменить `print` на `logging` модуль | Medium |
 | **Config** | Pydantic Settings для валидации конфигов | Medium |
-| **Tests** | pytest + fixtures для всех модулей | High |
+| **Tests** | pytest + fixtures для всех модулей | ✅ сделано (`tests/`, 33 теста) |
+| **CI/CD** | GitHub Actions: lint + тесты + проверка JS | ✅ сделано (`.github/workflows/ci.yml`) |
+| **Docker** | Dockerfile + compose | ✅ сделано |
 
 ### Архитектурные улучшения (следующие этапы)
 

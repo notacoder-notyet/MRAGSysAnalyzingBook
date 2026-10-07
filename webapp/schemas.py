@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
+from answer_utils import dedupe_sources, sanitize_answer
 from config import (
     CHAT_TITLE_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
@@ -108,9 +109,7 @@ class MessageOut(BaseModel):
         """
         if self.role != "assistant":
             return value
-        from webapp.rag_service import _sanitize_answer
-
-        return _sanitize_answer(value)
+        return sanitize_answer(value)
 
     @field_serializer("sources")
     def _dedupe_sources_field(self, value: list[SourceOut]) -> list[SourceOut]:
@@ -122,10 +121,8 @@ class MessageOut(BaseModel):
         """
         if not value:
             return value
-        from webapp.rag_service import _dedupe_sources
-
         rows = [{"lesson": s.lesson, "page": s.page, "score": s.score} for s in value]
-        return [SourceOut(**row) for row in _dedupe_sources(rows)]
+        return [SourceOut(**row) for row in dedupe_sources(rows)]
 
 
 class ChatOut(BaseModel):

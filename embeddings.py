@@ -95,9 +95,7 @@ def embed_texts(
     prefix = query_prefix if role == "query" else passage_prefix
 
     # Пустые строки заменяем на пробел, чтобы encode не падал на ""
-    safe_texts = [
-        prefix + t if (t or "").strip() else " " for t in texts
-    ]
+    safe_texts = [prefix + t if (t or "").strip() else " " for t in texts]
 
     vectors = model.encode(
         safe_texts,
@@ -182,9 +180,7 @@ def save_embeddings(
     meta_path.parent.mkdir(parents=True, exist_ok=True)
 
     if len(meta_df) != len(embeddings):
-        raise ValueError(
-            f"Число строк meta ({len(meta_df)}) != числу векторов ({len(embeddings)})"
-        )
+        raise ValueError(f"Число строк meta ({len(meta_df)}) != числу векторов ({len(embeddings)})")
 
     np.save(embeddings_path, embeddings)
     meta_df.to_csv(meta_path, index=False)
@@ -207,9 +203,7 @@ def load_embeddings(
     embeddings = np.load(embeddings_path)
     meta_df = pd.read_csv(meta_path)
     if len(meta_df) != len(embeddings):
-        raise ValueError(
-            f"Число строк meta ({len(meta_df)}) != числу векторов ({len(embeddings)})"
-        )
+        raise ValueError(f"Число строк meta ({len(meta_df)}) != числу векторов ({len(embeddings)})")
     return embeddings.astype(np.float32), meta_df
 
 

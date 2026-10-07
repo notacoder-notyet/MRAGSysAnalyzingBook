@@ -1,0 +1,30 @@
+# Единый конфиг инструментов качества (pytest, ruff, black, mypy).
+# Рантайм-зависимости остаются в requirements.txt, инструменты — в requirements-dev.txt.
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+markers = [
+    "integration: тесты, требующие данных/индекса (не запускаются в CI)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# venv/, .tmp/, data/ исключены через .gitignore (ruff уважает его)
+
+[tool.ruff.lint]
+# Только реальные ошибки (синтаксис, неопределённые имена), без стилевого шума —
+# чтобы CI оставался зелёным и падал лишь на настоящих проблемах.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = '''/(\.tmp|data|venv)/'''
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true

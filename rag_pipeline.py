@@ -43,6 +43,7 @@ class RAGConfig:
 @dataclass
 class RAGResult:
     """Результат RAG пайплайна."""
+
     answer: str
     sources: list[dict[str, Any]] = field(default_factory=list)
     query: str = ""
@@ -74,9 +75,9 @@ class RAGPipeline:
         filter_lesson: int | None = None,
     ) -> list[dict[str, Any]]:
         """Поиск релевантных чанков."""
-        q_vec = embed_texts(
-            [query], model=self.embedding_model, show_progress=False, role="query"
-        )[0]
+        q_vec = embed_texts([query], model=self.embedding_model, show_progress=False, role="query")[
+            0
+        ]
         k = top_k or self.config.top_k
         flt = filter_lesson if filter_lesson is not None else self.config.filter_lesson
         filter_dict = {"lesson": flt} if flt is not None else None
@@ -93,7 +94,10 @@ class RAGPipeline:
             lesson = meta.get("lesson", "?")
             page = meta.get("page", "?")
             text = chunk.get("text", "").strip()
-            parts.append(f"[Источник {i}: Урок {lesson}, Страница {page}]\n{text}")
+            # Номер фрагмента в квадратных скобках — на него модель ссылается
+            # как [i]; реальные номер урока/страницы подставит backend
+            # (см. answer_utils.substitute_refs), поэтому они не могут «поплыть».
+            parts.append(f"[{i}] Урок {lesson}, Страница {page}\n{text}")
         return "\n\n---\n\n".join(parts)
 
     def build_prompt(self, query: str, context: str) -> list[dict[str, str]]:
@@ -186,7 +190,9 @@ if __name__ == "__main__":
         chunks = pipeline.retrieve("функция потерь", top_k=3)
         for i, c in enumerate(chunks, 1):
             meta = c["metadata"]
-            print(f"  {i}. score={c['score']:.4f} | Урок {meta.get('lesson')} | стр. {meta.get('page')}")
+            print(
+                f"  {i}. score={c['score']:.4f} | Урок {meta.get('lesson')} | стр. {meta.get('page')}"
+            )
 
         print("\n--- Тест полного пайплайна (требует LLM ключ) ---")
         result = pipeline.ask("Что такое функция потерь?")
@@ -196,4 +202,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Ошибка: {e}")
         import traceback
+
         traceback.print_exc()
