@@ -14,7 +14,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from config import STATIC_DIR, WEBAPP_HOST, WEBAPP_PORT
 from webapp.database import init_db
@@ -64,9 +64,38 @@ def health() -> dict[str, str]:
 
 
 @app.get("/", include_in_schema=False)
-def index() -> FileResponse:
-    """Отдаёт главную страницу приложения."""
-    return FileResponse(STATIC_DIR / "index.html")
+def index() -> HTMLResponse:
+    """
+    Отдаёт главную страницу с cache-busting версией статики.
+
+    К ссылкам на style.css и app.js добавляется `?v=<mtime>`. Если файл
+    изменился, версия меняется, и браузер обязан запросить свежую копию.
+    Это решает проблему «браузер держит старый app.js», из-за которой
+    правки не видны и формы уходят в нативный submit.
+
+    Returns:
+        HTML страницы с подставленной версией статики и запретом кэша.
+    """
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    # Версия = самый свежий mtime среди файлов фронтенда
+    version = int(
+        max(
+            (STATIC_DIR / name).stat().st_mtime
+            for name in ("index.html", "style.css", "app.js")
+        )
+    )
+
+    html = html.replace("/static/style.css", f"/static/style.css?v={version}")
+    html = html.replace("/static/app.js", f"/static/app.js?v={version}")
+
+    return HTMLResponse(
+        html,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.get("/static/{path:path}", include_in_schema=False)

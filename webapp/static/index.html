@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MRAG — RAG по учебникам ML</title>
   <link rel="stylesheet" href="/static/style.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script defer src="/static/vendor/pdf.min.js"></script>
 </head>
 <body>
 
@@ -22,7 +22,7 @@
         <button class="tab" data-auth-tab="register">Регистрация</button>
       </div>
 
-      <form id="login-form" class="auth-form">
+      <form id="login-form" class="auth-form" method="post" autocomplete="on">
         <label class="field">
           <span class="field__label">Имя пользователя</span>
           <input type="text" name="username" autocomplete="username" required minlength="3" />
@@ -34,7 +34,7 @@
         <button type="submit" class="btn btn--primary">Войти</button>
       </form>
 
-      <form id="register-form" class="auth-form auth-form--hidden">
+      <form id="register-form" class="auth-form auth-form--hidden" method="post" autocomplete="on">
         <label class="field">
           <span class="field__label">Имя пользователя</span>
           <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
@@ -164,7 +164,7 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="/static/app.js"></script>
+  <script defer src="/static/app.js"></script>
 </body>
 </html>
 

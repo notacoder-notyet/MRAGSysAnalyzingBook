@@ -831,8 +831,9 @@ function initModals() {
 /** Точка входа: настраивает всё и восстанавливает сессию. */
 async function init() {
   if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    // PDF.js отдаётся локально из /static/vendor — без внешнего CDN,
+    // иначе недоступность CDN ломала бы просмотр презентаций
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdf.worker.min.js";
   }
 
   initAuth();
@@ -847,4 +848,10 @@ async function init() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", init);
+// Скрипты подключены с defer, поэтому к моменту выполнения DOM обычно уже
+// разобран. Если всё же рано — ждём DOMContentLoaded.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

@@ -17,15 +17,17 @@ def check_frontend_assets() -> None:
     """
     Проверяет структурную целостность фронтенда.
 
-    Ловит класс ошибок, который не виден парсеру: если функция не закрыта,
-    последующие функции и регистрация обработчиков оказываются вложенными внутрь
-    неё. Синтаксис при этом валиден, но `DOMContentLoaded` не срабатывает,
-    и формы уходят в нативный submit (страница перезагружается, поля очищаются).
+    Ловит класс ошибок, невидимый парсеру: если функция не закрыта, все
+    последующие функции и регистрация обработчиков оказываются вложенными
+    внутрь неё. Синтаксис при этом валиден, но `init` объявляется внутри
+    другой функции и обработчики не навешиваются — формы уходят в нативный
+    submit (страница перезагружается, поля очищаются, пароль попадает в URL).
 
-    Проверяем три вещи:
+    Проверяем:
       1. Баланс фигурных скобок в app.js и style.css;
-      2. `DOMContentLoaded` зарегистрирован на верхнем уровне (глубина 0);
-      3. Ключевые функции объявлены ровно один раз.
+      2. Ключевые функции объявлены на верхнем уровне (глубина 0);
+      3. Каждая из них объявлена ровно один раз;
+      4. Есть код, который реально вызывает init().
     """
     from pathlib import Path
 
@@ -37,35 +39,39 @@ def check_frontend_assets() -> None:
     js_lines = js_path.read_text(encoding="utf-8").split("\n")
     css = css_path.read_text(encoding="utf-8")
 
-    # 1. Баланс скобок
-    depth = 0
-    dom_depth = None
-    for line in js_lines:
-        depth += line.count("{") - line.count("}")
-        if "DOMContentLoaded" in line:
-            dom_depth = depth
-
-    assert depth == 0, f"app.js: несбалансированные скобки (итоговая глубина {depth})"
     assert css.count("{") == css.count("}"), "style.css: несбалансированные скобки"
 
-    # 2. Обработчик зарегистрирован на верхнем уровне
-    assert dom_depth is not None, "app.js: не найден DOMContentLoaded"
-    assert dom_depth == 0, (
-        f"app.js: DOMContentLoaded внутри вложенного блока (глубина {dom_depth}) — "
-        "значит какая-то функция не закрыта, обработчики не навесятся"
+    depth = 0
+    top_level_functions: dict[str, int] = {}
+    total_depth = 0
+
+    for line in js_lines:
+        stripped = line.strip()
+        # Глубина на момент объявления функции
+        if stripped.startswith(("function ", "async function ")):
+            for name in ("restoreSession", "init", "initAuth", "submitAuth", "api"):
+                if f"function {name}(" in stripped:
+                    top_level_functions.setdefault(name, depth)
+        depth += line.count("{") - line.count("}")
+        total_depth = depth
+
+    assert total_depth == 0, (
+        f"app.js: несбалансированные скобки (итоговая глубина {total_depth})"
     )
 
-    # 3. Ключевые функции объявлены один раз
+    for name, func_depth in top_level_functions.items():
+        assert func_depth == 0, (
+            f"app.js: {name}() объявлена на глубине {func_depth}, а не на верхнем "
+            "уровне — значит какая-то функция не закрыта, обработчики не навесятся"
+        )
+
     for name in ("restoreSession", "init", "initAuth", "submitAuth"):
-        count = js_lines_count(js_lines, f"function {name}(")
+        count = sum(1 for line in js_lines if f"function {name}(" in line)
         assert count == 1, f"app.js: {name} объявлена {count} раз(а), ожидалось 1"
 
-    print("  фронтенд: скобки сбалансированы, DOMContentLoaded на верхнем уровне ✓")
+    assert any("init()" in line for line in js_lines), "app.js: init() нигде не вызывается"
 
-
-def js_lines_count(lines: list[str], needle: str) -> int:
-    """Считает строки, содержащие подстроку (вспомогательное для проверки)."""
-    return sum(1 for line in lines if needle in line)
+    print("  фронтенд: скобки сбалансированы, ключевые функции на верхнем уровне ✓")
 
 
 def main() -> int:
