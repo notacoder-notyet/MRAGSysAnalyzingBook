@@ -587,9 +587,7 @@ function closePdfPanel() {
   if (lessonLabel) lessonLabel.textContent = "Урок —";
   if (pageLabel) pageLabel.textContent = "стр. —";
 
-  $("#pdf-viewport").innerHTML =
-    '<div class="pdf-panel__placeholder" id="pdf-placeholder">' +
-    "Откройте источник, чтобы увидеть страницу</div>";
+  setPdfPlaceholder("Откройте источник, чтобы увидеть страницу");
 }
 
 /**
@@ -650,15 +648,28 @@ async function openPdfPage(lesson, page) {
  * Загружает PDF урока через PDF.js.
  * @param {number} lesson
  */
+/**
+ * Пересоздаёт плейсхолдер внутри вьюпорта PDF.
+ *
+ * `renderPdfPage` полностью перерисовывает вьюпорт (`innerHTML = ""`), поэтому
+ * `#pdf-placeholder` из index.html исчезает. Если позже снова вызвать
+ * `loadPdfDocument` и обратиться к нему как к существующему — получим null,
+ * исключение, и панель не переключится на другой урок. Поэтому создаём заново.
+ * @param {string} message
+ */
+function setPdfPlaceholder(message) {
+  $("#pdf-viewport").innerHTML =
+    `<div class="pdf-panel__placeholder" id="pdf-placeholder">${message}</div>`;
+}
+
 async function loadPdfDocument(lesson) {
-  const placeholder = $("#pdf-placeholder");
-  placeholder.textContent = "Загрузка презентации…";
+  setPdfPlaceholder("Загрузка презентации…");
 
   try {
     state.pdfDoc = await pdfjsLib.getDocument(`/api/lessons/${lesson}/pdf`).promise;
   } catch (error) {
     state.pdfDoc = null;
-    placeholder.textContent = "Не удалось загрузить презентацию";
+    setPdfPlaceholder("Не удалось загрузить презентацию");
     return;
   }
 
