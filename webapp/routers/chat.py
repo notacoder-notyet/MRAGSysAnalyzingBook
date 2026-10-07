@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from config import CHAT_TITLE_MAX_LENGTH, DEFAULT_CHAT_TITLE
+
 from webapp import rag_service
 from webapp.database import get_db
 from webapp.models import Chat, Message, Source, User
@@ -51,6 +53,25 @@ def _get_owned_chat(chat_id: int, user: User, db: Session) -> Chat:
     return chat
 
 
+def _title_from_question(question: str) -> str:
+    """
+    Строит заголовок чата из вопроса (обрезая до лимита).
+
+    Args:
+        question: Текст вопроса.
+
+    Returns:
+        Заголовок длиной не более CHAT_TITLE_MAX_LENGTH.
+    """
+    return question.strip()[:CHAT_TITLE_MAX_LENGTH] or DEFAULT_CHAT_TITLE
+
+
+def _chat_is_empty(chat: Chat, db: Session) -> bool:
+    """True, если в чате ещё нет сообщений (значит, текущий вопрос — первый)."""
+    existing = db.scalar(select(Message.id).where(Message.chat_id == chat.id).limit(1))
+    return existing is None
+
+
 @router.post("", response_model=ChatOut, status_code=status.HTTP_201_CREATED)
 def create_chat(
     payload: ChatCreate,
@@ -58,7 +79,7 @@ def create_chat(
     user: User = Depends(get_current_user),
 ) -> Chat:
     """Создаёт новый пустой чат."""
-    chat = Chat(user_id=user.id, title=payload.title or "Новый чат")
+    chat = Chat(user_id=user.id, title=payload.title or DEFAULT_CHAT_TITLE)
     db.add(chat)
     db.commit()
     db.refresh(chat)
@@ -136,11 +157,16 @@ def ask_question(
     if payload.chat_id is not None:
         chat = _get_owned_chat(payload.chat_id, user, db)
     else:
-        title = payload.question.strip()[:60]
-        chat = Chat(user_id=user.id, title=title or "Новый чат")
+        chat = Chat(user_id=user.id, title=DEFAULT_CHAT_TITLE)
         db.add(chat)
         db.commit()
         db.refresh(chat)
+
+    # Имя нового чата = первые слова первого вопроса (как в ChatGPT). Кнопка
+    # «+ Новый чат» создаёт чат с дефолтным заголовком — здесь он заменяется
+    # вопросом. Уже переименованные вручную чаты не трогаем.
+    if _chat_is_empty(chat, db) and chat.title == DEFAULT_CHAT_TITLE:
+        chat.title = _title_from_question(payload.question)
 
     # Сохраняем вопрос пользователя
     user_message = Message(chat_id=chat.id, role="user", content=payload.question)

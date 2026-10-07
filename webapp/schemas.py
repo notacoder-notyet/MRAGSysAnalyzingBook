@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_valid
 from answer_utils import dedupe_sources, sanitize_answer
 from config import (
     CHAT_TITLE_MAX_LENGTH,
+    DEFAULT_CHAT_TITLE,
     PASSWORD_MIN_LENGTH,
     USERNAME_MAX_LENGTH,
     USERNAME_MIN_LENGTH,
@@ -68,7 +69,7 @@ class UserOut(BaseModel):
 class ChatCreate(BaseModel):
     """Создание нового чата."""
 
-    title: str = Field(default="Новый чат", max_length=CHAT_TITLE_MAX_LENGTH)
+    title: str = Field(default=DEFAULT_CHAT_TITLE, max_length=CHAT_TITLE_MAX_LENGTH)
 
 
 class ChatRename(BaseModel):
