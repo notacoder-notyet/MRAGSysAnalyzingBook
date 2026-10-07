@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 from config import (
     CHAT_TITLE_MAX_LENGTH,
@@ -96,6 +96,36 @@ class MessageOut(BaseModel):
     content: str
     created_at: datetime
     sources: list[SourceOut] = []
+
+    @field_serializer("content")
+    def _clean_assistant_content(self, value: str) -> str:
+        """
+        Чистит текст ответа ассистента при отдаче (LaTeX, сноски 【...】).
+
+        Нужно, чтобы и ранее сохранённые ответы показывались «вменяемо»:
+        санитайзер применяется при генерации, но старые сообщения уже лежат
+        в базе в исходном виде. Вопросы пользователя не трогаем.
+        """
+        if self.role != "assistant":
+            return value
+        from webapp.rag_service import _sanitize_answer
+
+        return _sanitize_answer(value)
+
+    @field_serializer("sources")
+    def _dedupe_sources_field(self, value: list[SourceOut]) -> list[SourceOut]:
+        """
+        Убирает дубликаты источников при отдаче: по одной странице на урок.
+
+        Так и старые ответы (источники которых сохранены как есть) показывают
+        тот же компактный список, что и свежие.
+        """
+        if not value:
+            return value
+        from webapp.rag_service import _dedupe_sources
+
+        rows = [{"lesson": s.lesson, "page": s.page, "score": s.score} for s in value]
+        return [SourceOut(**row) for row in _dedupe_sources(rows)]
 
 
 class ChatOut(BaseModel):
