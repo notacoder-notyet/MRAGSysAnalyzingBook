@@ -149,6 +149,7 @@ function logout(showMessage = true) {
   $("#auth-modal").classList.add("modal--visible");
   $("#chat-list").innerHTML = "";
   renderMessages([]);
+  closePdfPanel();
 
   if (showMessage) toast("Вы вышли из аккаунта");
 }
@@ -294,6 +295,8 @@ async function createChat() {
     state.currentChatId = chat.id;
     renderChatList();
     renderMessages([]);
+    // Новый чат пуст — PDF предыдущего чата здесь неуместен
+    closePdfPanel();
     $("#question-input").focus();
   } catch (error) {
     toast(error.message);
@@ -310,6 +313,9 @@ async function openChat(chatId) {
     state.currentChatId = chat.id;
     renderChatList();
     renderMessages(chat.messages || []);
+    // PDF — часть чата: показываем страницу-источник именно этого чата,
+    // а если источников нет — закрываем панель (иначе остаётся чужой PDF)
+    openPdfForChat(chat.messages || []);
   } catch (error) {
     toast(error.message);
   }
@@ -326,6 +332,7 @@ async function deleteChat(chatId) {
     if (state.currentChatId === chatId) {
       state.currentChatId = null;
       renderMessages([]);
+      closePdfPanel();
     }
     renderChatList();
     toast("Чат удалён");
@@ -413,7 +420,7 @@ function appendMessage(role, content, sources) {
       const score = typeof src.score === "number" ? src.score.toFixed(2) : "";
       chip.innerHTML =
         `Урок ${escapeHtml(src.lesson)} · стр. ${escapeHtml(src.page)}` +
-        `<span class="source-chip__score">${score}</span>`;
+        (score ? `<span class="source-chip__score">рел. ${score}</span>` : "");
       chip.title = "Открыть страницу презентации";
       chip.addEventListener("click", () => openPdfPage(src.lesson, src.page));
       sourcesBox.appendChild(chip);
@@ -432,7 +439,10 @@ function showTyping() {
   wrapper.id = "typing-indicator";
   wrapper.innerHTML = `
     <span class="msg__role">MRAG</span>
-    <div class="msg__bubble typing"><span></span><span></span><span></span></div>`;
+    <div class="msg__bubble typing">
+      <span class="typing__dot"></span><span class="typing__dot"></span><span class="typing__dot"></span>
+      <span class="typing__text">Модель думает…</span>
+    </div>`;
   $("#messages").appendChild(wrapper);
   scrollMessages();
 }
@@ -524,6 +534,76 @@ function initComposer() {
 // ============================================================
 
 /**
+ * Закрывает панель PDF и сбрасывает состояние документа.
+ *
+ * PDF локален для чата: при смене чата нельзя оставлять открытой
+ * страницу из предыдущего диалога.
+ */
+function closePdfPanel() {
+  const panel = $("#pdf-panel");
+  if (!panel) return;
+
+  panel.classList.add("pdf-panel--hidden");
+  panel.classList.remove("pdf-panel--fullscreen");
+  document.body.classList.remove("pdf-fullscreen");
+
+  const fsBtn = $("#pdf-fullscreen");
+  if (fsBtn) {
+    fsBtn.classList.remove("pdf-panel__icon--active");
+    fsBtn.title = "Развернуть на весь экран";
+  }
+
+  state.pdfDoc = null;
+  state.pdfLesson = null;
+  state.pdfPage = 1;
+
+  const lessonLabel = $("#pdf-lesson-label");
+  const pageLabel = $("#pdf-page-label");
+  if (lessonLabel) lessonLabel.textContent = "Урок —";
+  if (pageLabel) pageLabel.textContent = "стр. —";
+
+  $("#pdf-viewport").innerHTML =
+    '<div class="pdf-panel__placeholder" id="pdf-placeholder">' +
+    "Откройте источник, чтобы увидеть страницу</div>";
+}
+
+/**
+ * Открывает PDF, соответствующий чату: первую страницу-источник последнего
+ * ответа ассистента. Если источников нет — панель закрывается.
+ * @param {Array} messages
+ */
+function openPdfForChat(messages) {
+  const lastWithSources = [...(messages || [])]
+    .reverse()
+    .find(
+      (m) => m.role === "assistant" && Array.isArray(m.sources) && m.sources.length > 0
+    );
+
+  if (lastWithSources) {
+    const first = lastWithSources.sources[0];
+    openPdfPage(first.lesson, first.page);
+  } else {
+    closePdfPanel();
+  }
+}
+
+/**
+ * Переключает панель PDF в полноэкранный режим и обратно.
+ */
+function togglePdfFullscreen() {
+  const panel = $("#pdf-panel");
+  const btn = $("#pdf-fullscreen");
+  const on = panel.classList.toggle("pdf-panel--fullscreen");
+  document.body.classList.toggle("pdf-fullscreen", on);
+  if (btn) {
+    btn.classList.toggle("pdf-panel__icon--active", on);
+    btn.title = on ? "Свернуть до панели" : "Развернуть на весь экран";
+  }
+  // Перерисовываем под новый размер, когда браузер пересчитал layout
+  requestAnimationFrame(() => renderPdfPage(state.pdfPage));
+}
+
+/**
  * Открывает панель PDF и показывает нужную страницу урока.
  * @param {number} lesson
  * @param {number} page
@@ -576,10 +656,14 @@ async function renderPdfPage(pageNumber) {
 
   const pdfPage = await state.pdfDoc.getPage(page);
 
-  // Масштабируем под ширину панели, но не мельче 1.0
-  const viewportWidth = $("#pdf-viewport").clientWidth - 40;
+  // Подгоняем страницу целиком — и по ширине, и по высоте, — чтобы слайд
+  // не обрезался снизу. Небольшой отступ, чтобы тень не упиралась в края.
+  const pad = 34;
+  const viewportEl = $("#pdf-viewport");
+  const availWidth = Math.max(160, viewportEl.clientWidth - pad);
+  const availHeight = Math.max(160, viewportEl.clientHeight - pad);
   const baseViewport = pdfPage.getViewport({ scale: 1 });
-  const scale = Math.max(1.0, viewportWidth / baseViewport.width);
+  const scale = Math.min(availWidth / baseViewport.width, availHeight / baseViewport.height);
   const viewport = pdfPage.getViewport({ scale });
 
   const canvas = document.createElement("canvas");
@@ -589,7 +673,6 @@ async function renderPdfPage(pageNumber) {
 
   await pdfPage.render({ canvasContext: context, viewport }).promise;
 
-  const viewportEl = $("#pdf-viewport");
   viewportEl.innerHTML = "";
   viewportEl.appendChild(canvas);
 
@@ -636,6 +719,8 @@ function initPdfPanel() {
     const value = parseInt(event.target.value, 10);
     if (!Number.isNaN(value)) renderPdfPage(value);
   });
+
+  $("#pdf-fullscreen").addEventListener("click", togglePdfFullscreen);
 
   // Стрелки листают страницы, если фокус не в поле ввода
   document.addEventListener("keydown", (event) => {
@@ -804,7 +889,7 @@ function initModals() {
       // Модалка прячется снятием modal--visible, а панель PDF — добавлением
       // pdf-panel--hidden (она встроена в layout, а не накрывает экран)
       if (target.id === "pdf-panel") {
-        target.classList.add("pdf-panel--hidden");
+        closePdfPanel();
       } else {
         target.classList.remove("modal--visible");
       }
@@ -821,8 +906,12 @@ function initModals() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      $("#about-modal").classList.remove("modal--visible");
+    if (event.key !== "Escape") return;
+    $("#about-modal").classList.remove("modal--visible");
+    // Первый Escape сворачивает полноэкранный PDF, повторный — закрывает панель
+    if ($("#pdf-panel").classList.contains("pdf-panel--fullscreen")) {
+      togglePdfFullscreen();
+    } else {
       $("#pdf-panel").classList.add("pdf-panel--hidden");
     }
   });

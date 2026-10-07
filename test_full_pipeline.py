@@ -41,6 +41,25 @@ def check_frontend_assets() -> None:
 
     assert css.count("{") == css.count("}"), "style.css: несбалансированные скобки"
 
+    # CSS может быть «сбалансирован», но при этом селекторы вложены друг в
+    # друга из-за незакрытой скобки выше. Тогда браузер игнорирует правила, и
+    # интерфейс «белеет»: пропадают рамки, обрезается PDF, не виден индикатор
+    # ожидания. Валидная вложенность только на 1 уровне — внутри @media /
+    # @keyframes, поэтому селектор на глубине >= 2 — признак поломки.
+    css_depth = 0
+    css_nested: list[tuple[int, int, str]] = []
+    for idx, css_line in enumerate(css.split("\n"), 1):
+        stripped_css = css_line.strip()
+        if stripped_css.endswith("{") and css_depth >= 2:
+            css_nested.append((idx, css_depth, stripped_css[:50]))
+        css_depth += css_line.count("{") - css_line.count("}")
+
+    assert css_depth == 0, f"style.css: несбалансированные скобки (глубина {css_depth})"
+    assert not css_nested, (
+        "style.css: найдены вложенные селекторы (не закрыта скобка выше): "
+        f"{css_nested}. Из-за этого правила не применяются — интерфейс «белеет»."
+    )
+
     depth = 0
     nested: list[tuple[int, str, int]] = []
     declared: list[str] = []

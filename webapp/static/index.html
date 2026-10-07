@@ -141,7 +141,22 @@
             <span class="pdf-panel__lesson" id="pdf-lesson-label">Урок —</span>
             <span class="pdf-panel__page" id="pdf-page-label">стр. —</span>
           </div>
-          <button class="modal__close" data-close-modal="pdf-panel" title="Закрыть">&times;</button>
+          <div class="pdf-panel__actions">
+            <button
+              class="pdf-panel__icon"
+              id="pdf-fullscreen"
+              type="button"
+              title="Развернуть на весь экран"
+              aria-label="На весь экран"
+            >&#9974;</button>
+            <button
+              class="pdf-panel__icon"
+              data-close-modal="pdf-panel"
+              type="button"
+              title="Закрыть панель"
+              aria-label="Закрыть"
+            >&times;</button>
+          </div>
         </div>
 
         <div class="pdf-panel__nav">
