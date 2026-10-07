@@ -88,7 +88,7 @@ def build_report(top_k: int = DEFAULT_TOP_K) -> pd.DataFrame:
     store = create_vector_store()
     model = load_embedding_model()
     vectors = embed_texts(
-        gold["question"].astype(str).tolist(), model=model, show_progress=False
+        gold["question"].astype(str).tolist(), model=model, show_progress=False, role="query"
     )
 
     rows: list[dict[str, object]] = []

@@ -74,7 +74,9 @@ class RAGPipeline:
         filter_lesson: int | None = None,
     ) -> list[dict[str, Any]]:
         """Поиск релевантных чанков."""
-        q_vec = embed_texts([query], model=self.embedding_model, show_progress=False)[0]
+        q_vec = embed_texts(
+            [query], model=self.embedding_model, show_progress=False, role="query"
+        )[0]
         k = top_k or self.config.top_k
         flt = filter_lesson if filter_lesson is not None else self.config.filter_lesson
         filter_dict = {"lesson": flt} if flt is not None else None

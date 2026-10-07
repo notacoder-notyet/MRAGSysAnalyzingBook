@@ -43,7 +43,18 @@ USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 32
 PASSWORD_MIN_LENGTH = 6
 CHAT_TITLE_MAX_LENGTH = 60
-MIN_ANSWER_SCORE = 0.25  # ниже этого score считаем, что ответа в учебнике нет
+# Порог релевантности источника. Откалиброван под E5-модель (06.10.2026)
+# на 16 вопросах (6 релевантных, 10 офтоп).
+#
+# ВАЖНО: распределения почти пересекаются — это слабый сигнал, а не гарантия:
+#   релевантные: 0.840 .. 0.881
+#   офтоп:       0.730 .. 0.836   («билет на метро» дал 0.836!)
+# Мёртвая зона всего 0.836..0.840, поэтому идеального порога не существует.
+#
+# 0.82 — компромисс: отсекает большинство офтопа, оставляя релевантные
+# источники. Финальное решение «отвечать или отказаться» принимает LLM по
+# тексту чанков (см. RAG_SYSTEM_PROMPT), а не по score.
+MIN_ANSWER_SCORE = 0.82
 
 
 # ============================================================
@@ -70,9 +81,13 @@ YANDEX_SKIP_FILENAME_MARKERS: tuple[str, ...] = (
 # ============================================================
 # EMBEDDING MODEL
 # ============================================================
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# Retrieval-модель для поиска «вопрос → документ».
+# ВАЖНО: paraphrase-модели (MiniLM) для поиска не подходят — они обучались
+# на симметричное сравнение парафраз. E5 обучен на асимметричный retrieval
+# и требует префиксов "query: " / "passage: " (см. embeddings.model_prefixes).
+DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
 UPGRADE_EMBEDDING_MODEL = "BAAI/bge-m3"
-EMBEDDING_DIM = 384  # для paraphrase-multilingual-MiniLM-L12-v2
+EMBEDDING_DIM = 768  # для multilingual-e5-base
 UPGRADE_EMBEDDING_DIM = 1024  # для BAAI/bge-m3
 # Было 32 при 16 чанках. На ~1000 чанках CPU-прохода хватает с запасом.
 EMBEDDING_BATCH_SIZE = 64

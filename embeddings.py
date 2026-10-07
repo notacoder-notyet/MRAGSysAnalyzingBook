@@ -40,6 +40,28 @@ def load_embedding_model(
     return SentenceTransformer(model_name)
 
 
+def model_prefixes(model_name: str | None = None) -> tuple[str, str]:
+    """
+    Возвращает префиксы (query, passage) для модели эмбеддингов.
+
+    Часть моделей обучена с обязательными префиксами, и без них качество
+    поиска заметно падает:
+      - E5 (intfloat/multilingual-e5-*): "query: " для вопроса,
+        "passage: " для документа. Это не опционально — так модель обучалась.
+      - BGE-m3 префиксов не требует.
+
+    Args:
+        model_name: Имя модели (None — взять из конфига).
+
+    Returns:
+        Кортеж (префикс запроса, префикс документа).
+    """
+    name = (model_name or DEFAULT_EMBEDDING_MODEL).lower()
+    if "e5" in name:
+        return "query: ", "passage: "
+    return "", ""
+
+
 def embed_texts(
     texts: Sequence[str],
     model: SentenceTransformer | None = None,
@@ -47,6 +69,7 @@ def embed_texts(
     batch_size: int = EMBEDDING_BATCH_SIZE,
     normalize: bool = EMBEDDING_NORMALIZE,
     show_progress: bool = True,
+    role: str = "passage",
 ) -> np.ndarray:
     """
     Считает эмбеддинги для списка текстов.
@@ -58,6 +81,9 @@ def embed_texts(
         batch_size: Размер батча encode.
         normalize: L2-нормализация (удобно для cosine через dot product).
         show_progress: Показывать прогресс encode.
+        role: "query" для вопроса или "passage" для документа. Для E5-моделей
+              от этого зависит обязательный префикс — перепутать нельзя,
+              иначе качество поиска падает.
 
     Returns:
         Матрица shape (n_texts, dim) типа float32.
@@ -65,8 +91,13 @@ def embed_texts(
     if model is None:
         model = load_embedding_model(model_name)
 
+    query_prefix, passage_prefix = model_prefixes(model_name)
+    prefix = query_prefix if role == "query" else passage_prefix
+
     # Пустые строки заменяем на пробел, чтобы encode не падал на ""
-    safe_texts = [t if (t or "").strip() else " " for t in texts]
+    safe_texts = [
+        prefix + t if (t or "").strip() else " " for t in texts
+    ]
 
     vectors = model.encode(
         safe_texts,
@@ -235,7 +266,7 @@ if __name__ == "__main__":
 
     # Быстрая проверка retriever на одном вопросе
     query = "Что такое функция потерь?"
-    q_vec = embed_texts([query], model=model, show_progress=False)[0]
+    q_vec = embed_texts([query], model=model, show_progress=False, role="query")[0]
     hits = cosine_topk(q_vec, embeddings, meta_df, top_k=3)
     print("\nTop-3 по запросу:", query)
     print(hits[["score", "lesson", "page", "text"]])

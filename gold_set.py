@@ -326,7 +326,7 @@ def evaluate_retrieval(
     model = load_embedding_model()
 
     questions = df["question"].astype(str).tolist()
-    vectors = embed_texts(questions, model=model, show_progress=False)
+    vectors = embed_texts(questions, model=model, show_progress=False, role="query")
     max_k = max(max(ks), top_k)
 
     hits = {k: 0 for k in ks}

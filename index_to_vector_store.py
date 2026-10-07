@@ -117,7 +117,7 @@ def main():
 
     model = load_embedding_model()
     query = "Что такое функция потерь?"
-    q_vec = embed_texts([query], model=model, show_progress=False)[0]
+    q_vec = embed_texts([query], model=model, show_progress=False, role="query")[0]
 
     hits = store.search(q_vec, top_k=3)
     print(f"\nТестовый поиск: '{query}'")

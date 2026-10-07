@@ -49,7 +49,7 @@ def main() -> int:
 
     # Проверяем фильтрацию по метаданным: поиск в пределах одного урока
     query_vec = embed_texts(
-        ["Что такое функция потерь?"], model=model, show_progress=False
+        ["Что такое функция потерь?"], model=model, show_progress=False, role="query"
     )[0]
     filtered = store.search(query_vec, top_k=5, filter_dict={"lesson": 6})
     lessons_in_result = {h["metadata"].get("lesson") for h in filtered}
