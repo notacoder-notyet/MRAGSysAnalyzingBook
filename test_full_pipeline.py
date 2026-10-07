@@ -42,36 +42,47 @@ def check_frontend_assets() -> None:
     assert css.count("{") == css.count("}"), "style.css: несбалансированные скобки"
 
     depth = 0
-    top_level_functions: dict[str, int] = {}
+    nested: list[tuple[int, str, int]] = []
+    declared: list[str] = []
     total_depth = 0
 
     for line in js_lines:
         stripped = line.strip()
-        # Глубина на момент объявления функции
-        if stripped.startswith(("function ", "async function ")):
-            for name in ("restoreSession", "init", "initAuth", "submitAuth", "api"):
-                if f"function {name}(" in stripped:
-                    top_level_functions.setdefault(name, depth)
+        is_function = stripped.startswith(("function ", "async function "))
+
+        # Важно: проверяем ВСЕ объявления, а не только известные по имени —
+        # именно так пропускается вложенная функция (initComposer), и потом
+        # в рантайме прилетает «X is not defined».
+        if is_function and depth != 0:
+            nested.append((len(declared) + 1, stripped[:50], depth))
+        if is_function:
+            declared.append(stripped)
+
         depth += line.count("{") - line.count("}")
         total_depth = depth
 
     assert total_depth == 0, (
-        f"app.js: несбалансированные скобки (итоговая глубина {total_depth})"
+        f"app.js: несбалансированные скобки (итоговая глубина {total_depth}). "
+        "Какая-то функция не закрыта — весь код после неё вложен внутрь."
     )
 
-    for name, func_depth in top_level_functions.items():
-        assert func_depth == 0, (
-            f"app.js: {name}() объявлена на глубине {func_depth}, а не на верхнем "
-            "уровне — значит какая-то функция не закрыта, обработчики не навесятся"
-        )
+    assert not nested, (
+        "app.js: найдены вложенные объявления функций (значит выше не закрыта "
+        f"скобка): {nested}. Из-за этого функции не видны на верхнем уровне и "
+        "падают в рантайме с «is not defined»."
+    )
 
-    for name in ("restoreSession", "init", "initAuth", "submitAuth"):
+    # Ключевые функции объявлены по одному разу (защита от дублей после правок)
+    for name in ("restoreSession", "init", "initAuth", "submitAuth", "initComposer", "deleteChat"):
         count = sum(1 for line in js_lines if f"function {name}(" in line)
         assert count == 1, f"app.js: {name} объявлена {count} раз(а), ожидалось 1"
 
     assert any("init()" in line for line in js_lines), "app.js: init() нигде не вызывается"
 
-    print("  фронтенд: скобки сбалансированы, ключевые функции на верхнем уровне ✓")
+    print(
+        f"  фронтенд: {len(declared)} функций, все на верхнем уровне, "
+        "скобки сбалансированы ✓"
+    )
 
 
 def main() -> int:

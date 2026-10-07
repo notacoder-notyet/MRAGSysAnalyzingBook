@@ -321,6 +321,20 @@ async function openChat(chatId) {
  */
 async function deleteChat(chatId) {
   try {
+    await api(`/api/chat/${chatId}`, { method: "DELETE" });
+    state.chats = state.chats.filter((c) => c.id !== chatId);
+    if (state.currentChatId === chatId) {
+      state.currentChatId = null;
+      renderMessages([]);
+    }
+    renderChatList();
+    toast("Чат удалён");
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+
 // ============================================================
 // СООБЩЕНИЯ
 // ============================================================
@@ -498,6 +512,13 @@ function initComposer() {
     if (!question) return;
     input.value = "";
     autoGrow(input);
+    sendQuestion(question);
+  });
+
+  $("#new-chat-btn").addEventListener("click", createChat);
+}
+
+
 // ============================================================
 // PDF-ВЬЮВЕР
 // ============================================================
@@ -633,23 +654,6 @@ function initPdfPanel() {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => renderPdfPage(state.pdfPage), 250);
   });
-}
-    sendQuestion(question);
-  });
-
-  $("#new-chat-btn").addEventListener("click", createChat);
-}
-    await api(`/api/chat/${chatId}`, { method: "DELETE" });
-    state.chats = state.chats.filter((c) => c.id !== chatId);
-    if (state.currentChatId === chatId) {
-      state.currentChatId = null;
-      renderMessages([]);
-    }
-    renderChatList();
-    toast("Чат удалён");
-  } catch (error) {
-    toast(error.message);
-  }
 }
 
 // ============================================================
