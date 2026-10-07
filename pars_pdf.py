@@ -27,6 +27,7 @@ from config import (
     PAGES_CSV_PATH,
     RAW_PDF_DIR,
 )
+from text_clean import clean_page_text
 
 
 def extract_lesson_number(pdf_name: str) -> int | None:
@@ -65,7 +66,10 @@ def extract_text_from_pdf(pdf_path: str) -> list[dict[str, Any]]:
     with pdfplumber.open(pdf_path) as pdf:
         # Идём по страницам и сохраняем текст с citation-метаданными
         for page_number, page in enumerate(pdf.pages, start=1):
-            page_text = page.extract_text() or ""
+            # pdfplumber перемешивает подписи диаграмм и тащит эмодзи/матем.
+            # глифы — прогоняем через общий cleaner (см. text_clean.py)
+            raw_text = page.extract_text() or ""
+            page_text = clean_page_text(raw_text)
             pages.append(
                 {
                     "pdf_name": pdf_name,

@@ -755,6 +755,7 @@ docker compose up --build     # → http://localhost:8000
 |-----------|------|
 | Единые константы | `config.py` |
 | Парсинг и чанкинг | `pars_pdf.py` — `extract_text_from_pdf`, `batch_extract_chunks` |
+| Очистка текста страниц | `text_clean.py` — `clean_page_text`, `garble_ratio`, `normalize_unicode` |
 | Эмбеддинги | `embeddings.py` — `embed_chunks`, `cosine_topk` |
 | Векторное хранилище | `vector_store.py` — `VectorStore`, `ChromaStore`, `QdrantStore` |
 | Индексация | `index_to_vector_store.py` |

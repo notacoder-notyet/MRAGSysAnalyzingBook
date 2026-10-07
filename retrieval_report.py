@@ -19,46 +19,17 @@
 from __future__ import annotations
 
 import argparse
-import re
 
 import pandas as pd
 
 from config import DEFAULT_TOP_K
 from embeddings import embed_texts, load_embedding_model
 from gold_set import GoldItem, load_gold
+from text_clean import garble_ratio
 from vector_store import create_vector_store
 
 # Порог доли мусорных токенов, выше которого страницу считаем «сломанной»
 GARBLE_THRESHOLD = 0.15
-
-VOWELS = set("АЕЁИОУЫЭЮЯаеёиоуыэюяAEIOUYaeiouy")
-
-
-def garble_ratio(text: str) -> float:
-    """
-    Доля «мусорных» токенов — признак плохо извлечённой таблицы или схемы.
-
-    Мусор: токены длиной 1 символ, а также 2-3 символа без гласных
-    (типично при чтении текста по колонкам).
-
-    Args:
-        text: Текст страницы.
-
-    Returns:
-        Доля мусорных токенов от 0.0 до 1.0.
-    """
-    tokens = [t for t in re.split(r"\s+", text or "") if t]
-    if not tokens:
-        return 0.0
-
-    junk = 0
-    for token in tokens:
-        letters = re.sub(r"[^А-Яа-яЁёA-Za-z]", "", token)
-        if len(letters) <= 1:
-            junk += 1
-        elif len(letters) <= 3 and not (set(letters) & VOWELS):
-            junk += 1
-    return junk / len(tokens)
 
 
 def page_text_from_store(store, lesson: int, page: int) -> str:
