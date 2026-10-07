@@ -520,6 +520,22 @@ body {
   margin-left: 5px;
 }
 
+/* ---------- Ссылки-источники внутри текста ответа ---------- */
+.cite-link {
+  font: inherit;
+  color: var(--orange);
+  background: var(--orange-soft);
+  border: 1px solid #4a3a2e;
+  border-radius: 4px;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.cite-link:hover {
+  background: #3d2f24;
+  transform: translateY(-1px);
+}
+
 /* ---------- Индикатор ожидания ---------- */
 .typing {
   display: flex;

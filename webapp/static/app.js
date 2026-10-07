@@ -93,6 +93,22 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+/**
+ * Экранирует текст ответа и превращает упоминания источников вида
+ * "(Урок 12, Страница 8)" в кликабельные кнопки.
+ * @param {string} text — сырой текст ответа модели
+ * @returns {string} безопасный HTML
+ */
+function linkifyAnswer(text) {
+  const safe = escapeHtml(text);
+  return safe.replace(
+    /Урок\s*(\d+)\s*[,;]\s*(?:Страница|страницы|стр\.?)\s*(\d+)/gi,
+    (match, lesson, page) =>
+      `<button type="button" class="cite-link" data-lesson="${lesson}" data-page="${page}"` +
+      ` title="Открыть Урок ${lesson}, стр. ${page}">${match}</button>`
+  );
+}
+
 /** Автоувеличение высоты textarea под текст. */
 function autoGrow(textarea) {
   textarea.style.height = "auto";
@@ -407,7 +423,9 @@ function appendMessage(role, content, sources) {
 
   const bubble = document.createElement("div");
   bubble.className = "msg__bubble";
-  bubble.textContent = content || "";
+  // Ответ модели может содержать ссылки на источники — делаем их кликабельными,
+  // остальной текст экранируем, чтобы модель не ломала разметку.
+  bubble.innerHTML = linkifyAnswer(content || "");
 
   wrapper.append(roleLabel, bubble);
 
@@ -420,7 +438,7 @@ function appendMessage(role, content, sources) {
       const score = typeof src.score === "number" ? src.score.toFixed(2) : "";
       chip.innerHTML =
         `Урок ${escapeHtml(src.lesson)} · стр. ${escapeHtml(src.page)}` +
-        (score ? `<span class="source-chip__score">рел. ${score}</span>` : "");
+        (score ? `<span class="source-chip__score"> · рел. ${score}</span>` : "");
       chip.title = "Открыть страницу презентации";
       chip.addEventListener("click", () => openPdfPage(src.lesson, src.page));
       sourcesBox.appendChild(chip);
@@ -523,6 +541,13 @@ function initComposer() {
     input.value = "";
     autoGrow(input);
     sendQuestion(question);
+  });
+
+  // Клик по ссылке-источнику внутри текста ответа открывает нужную страницу PDF
+  $("#messages").addEventListener("click", (event) => {
+    const link = event.target.closest(".cite-link");
+    if (!link) return;
+    openPdfPage(parseInt(link.dataset.lesson, 10), parseInt(link.dataset.page, 10));
   });
 
   $("#new-chat-btn").addEventListener("click", createChat);
